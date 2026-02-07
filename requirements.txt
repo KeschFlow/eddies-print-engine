@@ -4,3 +4,4 @@ numpy
 Pillow
 reportlab
 qrcode
+
