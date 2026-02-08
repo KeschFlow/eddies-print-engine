@@ -1,160 +1,157 @@
 # quest_data.py
 # ==========================================================
-# QUEST DATABASE (Single Source of Quest Truth)
-# - Zones: thematische Lernwelten
-# - Missions: sportlich-körperliche Aktivierung + Denkauftrag
-# - XP: Progress ohne Wettbewerb (kein Ranking)
+# PAPER-MMORPG WORLD / QUEST ENGINE
+# - maps time-of-day to zones
+# - picks a mission per page deterministically via seed
 # ==========================================================
 
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Tuple
 import random
+
 
 @dataclass(frozen=True)
 class Mission:
     id: str
     title: str
-    movement: str        # sportliche Aufgabe (ortsunabhängig)
-    thinking: str        # Denkteil (konvergentes Ziel, mehrere Wege)
-    proof: str           # Nachweis (Haken/Unterschrift/Code)
+    movement: str
+    thinking: str
+    proof: str
     xp: int
-    difficulty: int      # 1..5
+    difficulty: int  # 1..5
+
 
 @dataclass(frozen=True)
 class Zone:
     id: str
     name: str
-    tagline: str
+    atmosphere: str
+    quest_type: str
+    time_ranges: List[Tuple[int, int]]  # [start,end) hours, end exclusive
     missions: List[Mission]
 
-# ---------------------------
-# ZONEN (erweiterbar)
-# ---------------------------
 
 ZONES: List[Zone] = [
     Zone(
-        id="zone_focus",
-        name="Focus Zone",
-        tagline="Körper an – Kopf klar.",
+        id="wachturm",
+        name="🏰 Der Wachturm",
+        atmosphere="Aufwachen, Struktur, Vorbereitung",
+        quest_type="Skill Quest",
+        time_ranges=[(6, 8)],
         missions=[
-            Mission(
-                id="fz_01",
-                title="Balance-Reset",
-                movement="30 Sekunden auf einem Bein stehen (rechts). Dann 30 Sekunden (links).",
-                thinking="ZIEL: Finde 2 verschiedene Wege, ein Problem zu lösen. Schreibe/zeichne zwei Strategien.",
-                proof="✅ Eltern/Lehrer: Initialen oder Code",
-                xp=15,
-                difficulty=1
-            ),
-            Mission(
-                id="fz_02",
-                title="Koordinations-Kick",
-                movement="20 Hampelmänner ODER 20 Armkreise (Alternative).",
-                thinking="ZIEL: Setze ein Muster fort (mind. 6 Schritte) UND erfinde ein neues Muster, das auch passt.",
-                proof="✅ Haken + 1 Satz: „Meine neue Regel ist …“",
-                xp=20,
-                difficulty=2
-            ),
-            Mission(
-                id="fz_03",
-                title="Atem & Plan",
-                movement="10 tiefe Atemzüge (4 Sekunden ein, 4 Sekunden aus) + 10 Kniebeugen (oder Wand-Kniebeugen).",
-                thinking="ZIEL: Plane zwei Wege zum gleichen Ziel: 1) schnell 2) sicher. Zeichne beide Wege.",
-                proof="✅ Skizze + Initialen",
-                xp=25,
-                difficulty=2
-            ),
+            Mission("wt_01","Rüstung anlegen","10 Kniebeugen ODER 10 Wand-Kniebeugen.",
+                    "ZIEL: Plane 2 Wege für den Start (schnell vs. ruhig).",
+                    "✅ Haken + (optional) Initialen", 15, 1),
+            Mission("wt_02","Fokus-Reset","30s Balance rechts + 30s Balance links.",
+                    "ZIEL: Nenne 2 Start-Schritte, die dich ins Tun bringen (A/B).",
+                    "✅ A/B notieren", 20, 2),
         ],
     ),
     Zone(
-        id="zone_strategy",
-        name="Strategy Zone",
-        tagline="Mehrere Wege, ein Ziel.",
+        id="wilder_pfad",
+        name="🌲 Der Wilde Pfad",
+        atmosphere="Erkunden, Beobachten, Umgebung",
+        quest_type="Exploration",
+        time_ranges=[(9, 12)],
         missions=[
-            Mission(
-                id="sz_01",
-                title="Sprint-Plan",
-                movement="3×: 10 Sekunden schnell auf der Stelle laufen, dazwischen 20 Sekunden Pause.",
-                thinking="ZIEL: Finde 2 unterschiedliche Lösungen für ein Regel-Rätsel. Erkläre den Unterschied.",
-                proof="✅ 2 Lösungen markiert (A/B) + Initialen",
-                xp=25,
-                difficulty=3
-            ),
-            Mission(
-                id="sz_02",
-                title="Wall-Push",
-                movement="10 Wand-Liegestütze (Alternative: 10 Schulter-Taps im Stehen).",
-                thinking="ZIEL: Optimiere: Nimm eine Lösung und mache sie kürzer/eleganter. Zeichne Variante 2.",
-                proof="✅ „Variante 2“ eingezeichnet",
-                xp=30,
-                difficulty=3
-            ),
-            Mission(
-                id="sz_03",
-                title="Team-Boost",
-                movement="Zu zweit: 20 Sekunden synchron klatschen (Rhythmus) ODER 20 Sekunden Spiegel-Bewegung.",
-                thinking="ZIEL: Erkläre einem anderen Kind deinen Lösungsweg. Danach findet ihr zusammen eine zweite Lösung.",
-                proof="✅ Beide Namen + Initialen",
-                xp=35,
-                difficulty=4
-            ),
+            Mission("wp_01","Musterjäger","20 Hampelmänner ODER 20 Schulter-Taps.",
+                    "ZIEL: Finde 3 Muster (Form/Rhythmus/Wiederholung) und skizziere sie.",
+                    "✅ 3 Skizzen", 25, 2),
+            Mission("wp_02","Zwei Wege","3× 10s Lauf auf der Stelle, 20s Pause.",
+                    "ZIEL: Zeichne 2 Wege zum gleichen Ziel (A/B) und vergleiche.",
+                    "✅ Route A + B", 30, 3),
         ],
     ),
     Zone(
-        id="zone_build",
-        name="Build Zone",
-        tagline="Bauen, drehen, neu denken.",
+        id="taverne",
+        name="🍲 Die Taverne",
+        atmosphere="Essen, Pause, Energie",
+        quest_type="Energy Quest",
+        time_ranges=[(12, 13)],
         missions=[
-            Mission(
-                id="bz_01",
-                title="Formen-Jäger",
-                movement="Finde im Raum 3 Formen (Kreis, Dreieck, Rechteck) und zeichne sie schnell ab.",
-                thinking="ZIEL: Baue aus 4 Teilen eine Form – und dann eine andere Form mit denselben Teilen.",
-                proof="✅ 2 Formen gezeichnet",
-                xp=30,
-                difficulty=3
-            ),
-            Mission(
-                id="bz_02",
-                title="Stabilitätstest",
-                movement="20 Sekunden Plank (Alternative: 20 Sekunden „Stuhl an der Wand“ oder 20 Sekunden auf Zehenspitzen).",
-                thinking="ZIEL: Entwirf 2 Brücken-Designs (Zeichnung), die Punkt A mit Punkt B verbinden.",
-                proof="✅ 2 Designs (A/B) + Initialen",
-                xp=35,
-                difficulty=4
-            ),
-            Mission(
-                id="bz_03",
-                title="Final Quest",
-                movement="10 Kniebeugen + 10 Armkreise + 10 Sekunden Balance (frei wählbar).",
-                thinking="ZIEL: Erfinde deine eigene Aufgabe: gleiches Ziel, andere Regeln, mehrere Lösungswege.",
-                proof="✅ Aufgabe + 1 Beispiel-Lösung",
-                xp=50,
-                difficulty=5
-            ),
+            Mission("tv_01","Energie-Scan","10 langsame Kniebeugen + 10s still stehen.",
+                    "ZIEL: Beschreibe 3 Sinnesdetails + 2 Wege zur Verbesserung (A/B).",
+                    "✅ 3 Beobachtungen + A/B", 20, 1),
+        ],
+    ),
+    Zone(
+        id="werkstatt",
+        name="🔨 Die Werkstatt",
+        atmosphere="Bauen, Erschaffen, Spielen",
+        quest_type="Build Quest",
+        time_ranges=[(13, 15)],
+        missions=[
+            Mission("ws_01","Brückenbauer","20 Armkreise + 10 Schulterrollen.",
+                    "ZIEL: Entwirf 2 Brücken-Designs (A/B) für Punkt A→B.",
+                    "✅ Design A + B", 30, 3),
+        ],
+    ),
+    Zone(
+        id="arena",
+        name="⚔️ Die Arena",
+        atmosphere="Toben, Sport, Action",
+        quest_type="Action Quest",
+        time_ranges=[(15, 17)],
+        missions=[
+            Mission("ar_01","Speed-Runde","30s Lauf ODER 30s Schattenboxen.",
+                    "ZIEL: Löse mit 2 Wegen: direkt vs. sicherer Umweg.",
+                    "✅ 2 Wege skizzieren", 35, 3),
+        ],
+    ),
+    Zone(
+        id="ratssaal",
+        name="🤝 Der Ratssaal",
+        atmosphere="Helfen, Familie, Kooperation",
+        quest_type="Social/Helper Quest",
+        time_ranges=[(17, 19)],
+        missions=[
+            Mission("rs_01","Helfer-Quest","10 Kniebeugen + 10 Armkreise.",
+                    "ZIEL: Erkläre jemandem deinen Weg; gemeinsam findet ihr Weg 2.",
+                    "✅ 2 Namen + Initialen", 45, 4),
+        ],
+    ),
+    Zone(
+        id="quellen",
+        name="🛁 Die Quellen",
+        atmosphere="Bad, Pflege, Routine",
+        quest_type="Water Quest",
+        time_ranges=[(19, 21)],
+        missions=[
+            Mission("qq_01","Routine-Designer","10 Wand-Liegestütze ODER 10 Kniebeugen.",
+                    "ZIEL: 2 Abend-Routinen (kurz/lang) mit gleichem Ziel.",
+                    "✅ kurz/lang notieren", 30, 3),
+        ],
+    ),
+    Zone(
+        id="trauminsel",
+        name="🌙 Die Traum-Insel",
+        atmosphere="Schlaf, Ruhe, Dunkelheit",
+        quest_type="Silent Quest",
+        time_ranges=[(21, 24), (0, 5)],
+        missions=[
+            Mission("ti_01","Traum-Plan","5 tiefe Atemzüge + 20s Ruhe.",
+                    "ZIEL: Erfinde 2 Enden für eine Geschichte – beide plausibel.",
+                    "✅ Ende A + B", 20, 1),
         ],
     ),
 ]
 
-# ---------------------------
-# HELPER: Auswahl & Progress
-# ---------------------------
 
-def get_zones() -> List[Dict]:
-    return [{"id": z.id, "name": z.name, "tagline": z.tagline} for z in ZONES]
-
-def find_zone(zone_id: str) -> Zone:
+def zone_for_hour(hour: int) -> Zone:
+    h = hour % 24
     for z in ZONES:
-        if z.id == zone_id:
-            return z
+        for start, end in z.time_ranges:
+            if start <= h < end:
+                return z
     return ZONES[0]
 
-def pick_mission(zone_id: str, difficulty: int, seed: int) -> Mission:
-    z = find_zone(zone_id)
+
+def pick_mission(hour: int, difficulty: int, seed: int) -> Mission:
+    z = zone_for_hour(hour)
     rng = random.Random(seed)
-
-    pool = [m for m in z.missions if m.difficulty <= difficulty]
-    if not pool:
-        pool = z.missions
-
+    pool = [m for m in z.missions if m.difficulty <= difficulty] or z.missions
     return rng.choice(pool)
+
+
+def fmt_hour(hour: int) -> str:
+    return f"{hour%24:02d}:00"
