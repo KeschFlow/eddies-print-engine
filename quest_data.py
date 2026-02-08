@@ -37,7 +37,7 @@ ZONES: List[Zone] = [
         name="🏰 Der Wachturm",
         atmosphere="Aufwachen, Struktur, Vorbereitung",
         quest_type="Skill Quest",
-        time_ranges=[(6, 8)],
+        time_ranges=[(6, 9)],
         missions=[
             Mission("wt_01","Rüstung anlegen","10 Kniebeugen ODER 10 Wand-Kniebeugen.",
                     "ZIEL: Plane 2 Wege für den Start (schnell vs. ruhig).",
@@ -127,7 +127,7 @@ ZONES: List[Zone] = [
         name="🌙 Die Traum-Insel",
         atmosphere="Schlaf, Ruhe, Dunkelheit",
         quest_type="Silent Quest",
-        time_ranges=[(21, 24), (0, 5)],
+       time_ranges=[(21, 24), (0, 6)],
         missions=[
             Mission("ti_01","Traum-Plan","5 tiefe Atemzüge + 20s Ruhe.",
                     "ZIEL: Erfinde 2 Enden für eine Geschichte – beide plausibel.",
