@@ -4,6 +4,202 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
+import streamlit as st
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+import random
+
+from quest_data import (
+    get_zone_for_hour,
+    pick_mission_for_time,
+    fmt_hour,
+    validate_quest_db,
+)
+
+# ==========================================================
+# STREAMLIT SETUP
+# ==========================================================
+
+st.set_page_config(
+    page_title="Quest-Logbuch Generator",
+    page_icon="📘",
+    layout="centered"
+)
+
+# ==========================================================
+# PDF / HUD LAYOUT (A4 – KDP SAFE)
+# ==========================================================
+
+PAGE_SIZE = A4
+M_L, M_R, M_T, M_B = 16*mm, 16*mm, 16*mm, 16*mm
+HUD_TOP_H = 18*mm
+HUD_BOTTOM_H = 22*mm
+
+
+# ==========================================================
+# HUD RENDERING
+# ==========================================================
+
+def draw_hud(c, w, h, zone, hour, mission, difficulty, page_no):
+    # Header
+    r, g, b = zone.color
+    c.saveState()
+    c.setFillColorRGB(r, g, b)
+    c.rect(0, h - (HUD_TOP_H + M_T), w, HUD_TOP_H + M_T, fill=1, stroke=0)
+
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(M_L, h - M_T - 12*mm, f"{zone.icon} {zone.name.upper()}")
+
+    c.setFont("Helvetica", 10)
+    c.drawString(M_L, h - M_T - 16*mm, f"{zone.quest_type} · {zone.atmosphere}")
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(w - M_R, h - M_T - 12*mm, fmt_hour(hour))
+    c.restoreState()
+
+    # Footer (Mission Card)
+    c.saveState()
+    c.setFillColor(colors.white)
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1.2)
+    c.roundRect(
+        M_L,
+        M_B,
+        w - M_L - M_R,
+        HUD_BOTTOM_H,
+        6,
+        fill=1,
+        stroke=1
+    )
+
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(
+        M_L + 4*mm,
+        M_B + HUD_BOTTOM_H - 8*mm,
+        f"MISSION: {mission.title}"
+    )
+    c.drawRightString(
+        w - M_R - 4*mm,
+        M_B + HUD_BOTTOM_H - 8*mm,
+        f"+{mission.xp} XP"
+    )
+
+    c.setFont("Helvetica", 10)
+    c.drawString(M_L + 4*mm, M_B + 6*mm, f"DIFF: {difficulty}/5")
+    c.drawRightString(w - M_R - 4*mm, M_B + 6*mm, f"SEITE {page_no}")
+    c.restoreState()
+
+
+# ==========================================================
+# AKTIVITÄTS-ENGINE (ECHT, KEIN PLACEHOLDER)
+# ==========================================================
+
+def render_activity_page(c, w, h, page_no):
+    """
+    Zentrale Aktivitätsfläche:
+    - groß
+    - leer
+    - papierfreundlich
+    - für Zeichnen, Labyrinth, Aufgaben
+    """
+
+    top_limit = h - (HUD_TOP_H + M_T) - 10*mm
+    bottom_limit = M_B + HUD_BOTTOM_H + 10*mm
+
+    height = top_limit - bottom_limit
+    width = w - M_L - M_R
+
+    c.setLineWidth(1)
+    c.rect(
+        M_L,
+        bottom_limit,
+        width,
+        height
+    )
+
+    # dezente Orientierung (kein Textzwang)
+    c.setFont("Helvetica", 9)
+    c.drawString(
+        M_L + 4*mm,
+        bottom_limit + height - 8*mm,
+        "✎ Hier ist Platz für Zeichnung, Lösung oder Skizze"
+    )
+
+
+# ==========================================================
+# PDF BUILDER
+# ==========================================================
+
+def build_pdf(pages, start_hour, difficulty, seed, show_text):
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=PAGE_SIZE)
+    w, h = PAGE_SIZE
+
+    for p in range(1, pages + 1):
+        hour = (start_hour + (p - 1)) % 24
+        zone = get_zone_for_hour(hour)
+        mission = pick_mission_for_time(
+            hour,
+            difficulty,
+            seed,
+            page_index=p
+        )
+
+        # 1️⃣ Activity / Zeichnen
+        render_activity_page(c, w, h, p)
+
+        # 2️⃣ HUD
+        draw_hud(c, w, h, zone, hour, mission, difficulty, p)
+
+        # 3️⃣ Missionstext optional
+        if show_text:
+            y = M_B + HUD_BOTTOM_H + 6*mm
+            c.setFont("Helvetica", 10)
+            c.drawString(M_L, y, f"Bewegung: {mission.movement}")
+            c.drawString(M_L, y + 6*mm, f"Denken: {mission.thinking}")
+            c.drawString(M_L, y + 12*mm, f"Checkpoint: {mission.proof}")
+
+        c.showPage()
+
+    c.save()
+    return buf.getvalue()
+
+
+# ==========================================================
+# UI
+# ==========================================================
+
+st.title("📘 Quest-Logbuch Generator")
+st.caption("Paper-MMORPG: Zeit → Zone → Mission. Kein Wettbewerb. Mehrere Wege sind richtig.")
+
+issues = validate_quest_db()
+if issues:
+    st.warning("Quest-DB Hinweise:\n- " + "\n- ".join(issues))
+
+with st.form("generator"):
+    pages = st.selectbox("Seiten (KDP: 24)", [24, 16, 8], index=0)
+    start_time = st.text_input("Startzeit (Stunde oder HH:MM)", "06:00")
+    difficulty = st.slider("Schwierigkeit (1–5)", 1, 5, 3)
+    seed = st.number_input("Seed", 0, 999999, 1234)
+    show_text = st.checkbox("Missionstext anzeigen", True)
+    go = st.form_submit_button("📄 PDF generieren")
+
+if go:
+    start_hour = int(start_time.split(":")[0]) % 24
+    pdf = build_pdf(pages, start_hour, difficulty, seed, show_text)
+
+    st.download_button(
+        "⬇️ PDF herunterladen",
+        pdf,
+        file_name="quest_logbuch.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
 
 from quest_data import (
     get_zone_for_hour,
