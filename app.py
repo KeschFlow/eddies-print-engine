@@ -130,7 +130,7 @@ def sort_uploads_smart(uploaded_list):
     if not uploaded_list:
         return []
     items = []
-    for idx, f in enumeratimport streamlit as st
+    for idx, f in enumerate(uploaded_list):
 import cv2
 import os
 import random
