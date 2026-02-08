@@ -5,8 +5,10 @@ import random
 import tempfile
 import re
 from pathlib import Path
+
 import qrcode
 from PIL import Image
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
@@ -24,18 +26,20 @@ st.set_page_config(page_title="Eddie's Welt", layout="centered")
 def _in_to_mm(x_in: float) -> float:
     return float(x_in) * 25.4
 
+
 def _draw_debug_overlay(c, w, h, kdp_mode, margin, bleed=0.0):
+    """Overlay: BLUE=PDF edge, RED=Trim, GREEN=Safe-area box"""
     c.saveState()
     c.setLineWidth(0.7)
 
     if kdp_mode and bleed > 0:
         c.setStrokeColor(colors.blue)   # PDF edge
         c.rect(0, 0, w, h)
-        c.setStrokeColor(colors.red)    # Trim
-        c.rect(bleed, bleed, w - 2*bleed, h - 2*bleed)
+        c.setStrokeColor(colors.red)    # Trim (page minus bleed)
+        c.rect(bleed, bleed, w - 2 * bleed, h - 2 * bleed)
 
-    c.setStrokeColor(colors.green)      # Safe Area
-    c.rect(margin, margin, w - 2*margin, h - 2*margin)
+    c.setStrokeColor(colors.green)      # Safe area
+    c.rect(margin, margin, w - 2 * margin, h - 2 * margin)
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 8)
@@ -43,27 +47,28 @@ def _draw_debug_overlay(c, w, h, kdp_mode, margin, bleed=0.0):
     c.drawString(margin + 2, h - margin - 10, label)
     c.restoreState()
 
-def _cover_fit_to_page(src_path, out_path, page_w, page_h, quality=85):
+
+def _cover_fit_to_page(src_path, out_path, page_w_px, page_h_px, quality=85):
     """
-    src_path: grayscale sketch jpg
-    out_path: resized/cropped jpg in target pixel dims (page_w,page_h)
+    Fit grayscale image to exact pixel dims by 'cover' strategy (scale up + center crop).
     """
     try:
         q = int(max(35, min(95, int(quality))))
         im = Image.open(src_path).convert("L")
         iw, ih = im.size
 
-        scale = max(page_w / iw, page_h / ih)
+        scale = max(page_w_px / iw, page_h_px / ih)
         nw, nh = int(iw * scale), int(ih * scale)
         im = im.resize((nw, nh), Image.LANCZOS)
 
-        left, top = (nw - page_w) // 2, (nh - page_h) // 2
-        im = im.crop((left, top, left + page_w, top + page_h))
+        left, top = (nw - page_w_px) // 2, (nh - page_h_px) // 2
+        im = im.crop((left, top, left + page_w_px, top + page_h_px))
 
         im.save(out_path, "JPEG", quality=q, optimize=True, progressive=True, subsampling=2)
         return True
-    except:
+    except Exception:
         return False
+
 
 def foto_zu_skizze(input_path, output_path):
     try:
@@ -78,142 +83,7 @@ def foto_zu_skizze(input_path, output_path):
         sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
         cv2.imwrite(output_path, sketch)
         return True
-    except:
-        return False
-
-def zeichne_suchspiel(c, width, y_start, img_height, anzahl):
-    form = random.choice(["kreis", "viereck", "dreieck"])
-    c.setLineWidth(2)
-    c.setStrokeColor(colors.black)
-    c.setFillColor(colors.white)
-
-    y_min, y_max = int(y_start), int(y_start + img_height - 30)
-    for _ in range(anzahl):
-        x = random.randint(50, int(width) - 50)
-        y = random.randint(y_min, y_max) if y_max > y_min else y_min
-        s = random.randint(15, 25)
-
-        if form == "kreis":
-            c.circle(x, y, s / 2, fill=1, stroke=1)
-        elif form == "viereck":
-            c.rect(x - s / 2, y - s / 2, s, s, fill=1, stroke=1)
-        else:
-            p = c.beginPath()
-            p.moveTo(x, y + s/2)
-            p.lineTo(x - s/2, y - s/2)
-            p.lineTo(x + s/2, y - s/2)
-            p.close()
-            c.drawPath(p, fill=1, stroke=1)
-
-    leg_y = max(50, y_start - 35)
-    c.setFillColor(colors.white)
-    if form == "kreis":
-        c.circle(80, leg_y + 5, 8, fill=0, stroke=1)
-    elif form == "viereck":
-        c.rect(72, leg_y - 3, 16, 16, fill=0, stroke=1)
-    else:
-        p = c.beginPath()
-        p.moveTo(80, leg_y + 13)
-        p.lineTo(72, leg_y - 3)
-        p.lineTo(88, leg_y - 3)
-        p.close()
-        c.drawPath(p, fill=0, stroke=1)
-
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(100, leg_y, f"x {anzahl}")
-
-def sort_uploads_smart(uploaded_list):
-    """
-    Sort by EXIF datetime if available (needs >=2 images with dt), else keep upload order.
-    """
-    if not uploaded_list:
-        return []
-    items = []
-    for idx, f in enumerate(uploaded_list):
-import cv2
-import os
-import random
-import tempfile
-import re
-from pathlib import Path
-import qrcode
-from PIL import Image
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-
-# =========================================================
-# 0) STREAMLIT CONFIG (MUSS ALS ERSTES KOMMEN)
-# =========================================================
-st.set_page_config(page_title="Eddie's Welt", layout="centered")
-
-# =========================================================
-# 1) CORE HELPERS
-# =========================================================
-
-def _in_to_mm(x_in: float) -> float:
-    return float(x_in) * 25.4
-
-
-def _draw_debug_overlay(c, w, h, kdp_mode, margin, bleed=0.0):
-    c.saveState()
-    c.setLineWidth(0.7)
-
-    if kdp_mode and bleed > 0:
-        c.setStrokeColor(colors.blue)   # PDF edge
-        c.rect(0, 0, w, h)
-        c.setStrokeColor(colors.red)    # Trim
-        c.rect(bleed, bleed, w - 2 * bleed, h - 2 * bleed)
-
-    c.setStrokeColor(colors.green)      # Safe Area
-    c.rect(margin, margin, w - 2 * margin, h - 2 * margin)
-
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica", 8)
-    label = "DEBUG: BLUE=EDGE, RED=TRIM, GRN=SAFE" if kdp_mode else "DEBUG: GRN=SAFE"
-    c.drawString(margin + 2, h - margin - 10, label)
-    c.restoreState()
-
-
-def _cover_fit_to_page(src_path, out_path, page_w, page_h, quality=85):
-    """
-    src_path: grayscale sketch jpg
-    out_path: resized/cropped jpg in target pixel dims (page_w,page_h)
-    """
-    try:
-        q = int(max(35, min(95, int(quality))))
-        im = Image.open(src_path).convert("L")
-        iw, ih = im.size
-
-        scale = max(page_w / iw, page_h / ih)
-        nw, nh = int(iw * scale), int(ih * scale)
-        im = im.resize((nw, nh), Image.LANCZOS)
-
-        left, top = (nw - page_w) // 2, (nh - page_h) // 2
-        im = im.crop((left, top, left + page_w, top + page_h))
-
-        im.save(out_path, "JPEG", quality=q, optimize=True, progressive=True, subsampling=2)
-        return True
-    except:
-        return False
-
-
-def foto_zu_skizze(input_path, output_path) -> bool:
-    try:
-        img = cv2.imread(input_path)
-        if img is None:
-            return False
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        inverted = 255 - gray
-        blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
-        inverted_blurred = 255 - blurred
-        sketch = cv2.divide(gray, inverted_blurred, scale=256.0)
-        sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
-        cv2.imwrite(output_path, sketch)
-        return True
-    except:
+    except Exception:
         return False
 
 
@@ -241,6 +111,7 @@ def zeichne_suchspiel(c, width, y_start, img_height, anzahl):
             p.close()
             c.drawPath(p, fill=1, stroke=1)
 
+    # Legende
     leg_y = max(50, y_start - 35)
     c.setFillColor(colors.white)
     if form == "kreis":
@@ -261,7 +132,9 @@ def zeichne_suchspiel(c, width, y_start, img_height, anzahl):
 
 
 def sort_uploads_smart(uploaded_list):
-    """Sort by EXIF datetime if available (needs >=2 images with dt), else keep upload order."""
+    """
+    Sort by EXIF datetime if available (needs >=2 images with datetime), else keep upload order.
+    """
     if not uploaded_list:
         return []
 
@@ -272,13 +145,14 @@ def sort_uploads_smart(uploaded_list):
             f.seek(0)
             img = Image.open(f)
             exif = img.getexif()
-            dt = exif.get(36867) or exif.get(306)
+            dt = exif.get(36867) or exif.get(306)  # DateTimeOriginal or DateTime
             f.seek(0)
             dt_str = str(dt).strip() if dt else ""
-        except:
+        except Exception:
             dt_str = ""
         items.append((dt_str, idx, f))
 
+    # If we have at least 2 EXIF timestamps, sort chronologically; else keep upload order
     if sum(1 for d, _, _ in items if d) >= 2:
         items.sort(key=lambda x: (x[0] == "", x[0], x[1]))
     else:
@@ -287,7 +161,7 @@ def sort_uploads_smart(uploaded_list):
     return [f for _, _, f in items]
 
 
-def _kdp_traffic_light(*, kdp_mode, bleed_in, safe_mm, pdf_mb, budget_mb, dpi, roentgen_overlay_on):
+def _kdp_traffic_light(*, kdp_mode, bleed_in, safe_mm, pdf_mb, budget_mb, dpi, roentgen):
     checks = []
     if not kdp_mode:
         return "red", [("red", "KDP-Modus AUS.")]
@@ -304,7 +178,7 @@ def _kdp_traffic_light(*, kdp_mode, bleed_in, safe_mm, pdf_mb, budget_mb, dpi, r
     else:
         checks.append(("red", f"Safe-Area Offset: {safe_mm:.1f} mm (zu klein)."))
 
-    # Budget-Ampel: Gelb bis +25% tolerieren
+    # Budget-Ampel: gelb bis +25% tolerieren
     if pdf_mb <= budget_mb:
         checks.append(("green", f"PDF-Größe: {pdf_mb:.1f} MB."))
     elif pdf_mb <= budget_mb * 1.25:
@@ -317,7 +191,7 @@ def _kdp_traffic_light(*, kdp_mode, bleed_in, safe_mm, pdf_mb, budget_mb, dpi, r
     else:
         checks.append(("yellow", f"DPI: {int(dpi)} (niedrig)."))
 
-    if bool(roentgen_overlay_on):
+    if bool(roentgen):
         checks.append(("green", "Röntgen-Overlay: AN."))
     else:
         checks.append(("yellow", "Röntgen-Overlay: AUS (für Testlauf: AN empfohlen)."))
@@ -340,6 +214,7 @@ def build_pdf(*, sorted_files, kind_name, kdp_mode, dpi, size_budget_mb, auto_co
     with tempfile.TemporaryDirectory() as temp_dir:
         raw_paths, seed_parts = [], []
 
+        # Save uploads to temp
         for idx, up in enumerate(sorted_files):
             safe_name = Path(up.name).name
             safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", safe_name) or "upload.jpg"
@@ -349,7 +224,7 @@ def build_pdf(*, sorted_files, kind_name, kdp_mode, dpi, size_budget_mb, auto_co
             raw_paths.append(p)
             seed_parts.append(f"{safe_name}:{up.size}")
 
-        # Reproduzierbarer Shuffle pro Kind + Uploadset
+        # Deterministic shuffle per kid + uploadset
         random.seed((kind_name.strip() + "|" + "|".join(seed_parts)).encode("utf-8", errors="ignore"))
 
         final_paths = list(raw_paths)
@@ -426,10 +301,10 @@ def build_pdf(*, sorted_files, kind_name, kdp_mode, dpi, size_budget_mb, auto_co
                         draw_done = True
                         try:
                             file_mb = os.path.getsize(out_bl) / (1024 * 1024)
-                        except:
+                        except Exception:
                             pass
                     else:
-                        # Fallback: draw sketch within safe content area
+                        # Fallback: draw inside safe content area
                         c.drawImage(
                             out_sk,
                             margin,
@@ -441,10 +316,10 @@ def build_pdf(*, sorted_files, kind_name, kdp_mode, dpi, size_budget_mb, auto_co
                         draw_done = True
                         try:
                             file_mb = os.path.getsize(out_sk) / (1024 * 1024)
-                        except:
+                        except Exception:
                             pass
 
-                    # Budget-Bremse: zählt auch Fallback (out_sk)
+                    # Budget-Bremse (zählt auch Fallback out_sk)
                     done += 1
                     est_mb += file_mb
                     est_full = (est_mb / max(1, done)) * target_pages
@@ -482,18 +357,19 @@ def build_pdf(*, sorted_files, kind_name, kdp_mode, dpi, size_budget_mb, auto_co
 
         # QR PAGE (KDP) – mit Kontext
         if kdp_mode:
+            clean_url = (str(app_url).strip() or "https://eddie-welt.streamlit.app")
             c.setFont("Helvetica-Bold", 16)
             c.drawCentredString(w / 2, h / 2 + 90, "Teile die Magie!")
             c.setFont("Helvetica", 11)
             c.drawCentredString(w / 2, h / 2 + 65, "Scanne den QR-Code für die App:")
 
-            qr = qrcode.make(app_url)
+            qr = qrcode.make(clean_url)
             qr_p = os.path.join(temp_dir, "qr.png")
             qr.save(qr_p)
 
             c.drawImage(qr_p, (w - 140) / 2, h / 2 - 70, 140, 140)
             c.setFont("Helvetica", 10)
-            c.drawCentredString(w / 2, h / 2 - 85, app_url)
+            c.drawCentredString(w / 2, h / 2 - 85, clean_url)
 
             if roentgen_overlay:
                 _draw_debug_overlay(c, w, h, kdp_mode, margin, BLEED)
@@ -527,20 +403,29 @@ st.title("✏️ Eddie's Welt")
 
 with st.sidebar:
     st.header("Einstellungen")
-    kdp_mode = st.toggle('📦 KDP-Druckversion (8.5"x8.5")', value=False)
+
+    kdp_mode = st.toggle('📦 KDP-Druckversion (8.5" × 8.5")', value=False)
     dpi = st.select_slider("🖨️ Druck-DPI", options=[180, 240, 300], value=240, disabled=not kdp_mode)
+
     st.divider()
+
     size_budget_mb = st.select_slider("📦 PDF-Budget (MB)", options=[40, 60, 80, 120, 150], value=80, disabled=not kdp_mode)
     auto_compress = st.toggle("🧯 Auto-Kompression", value=True, disabled=not kdp_mode)
 
-    # UX: getrennt & eindeutig
+    st.divider()
+
     roentgen_overlay = st.toggle("🩻 Röntgen-Overlay (Trim/Safe)", value=False)
     debug_mode = st.toggle("🧰 Debug (Fehlerdetails)", value=False)
 
     app_url = st.text_input("QR-Link", "https://eddie-welt.streamlit.app")
 
 kind_name = st.text_input("Name des Kindes", "Eddie").strip()
-uploaded_raw = st.file_uploader("Wähle Bilder (max. 24):", accept_multiple_files=True, type=["jpg", "jpeg", "png"])
+
+uploaded_raw = st.file_uploader(
+    "Wähle Bilder (max. 24):",
+    accept_multiple_files=True,
+    type=["jpg", "jpeg", "png"],
+)
 
 if uploaded_raw:
     oversize = next((f for f in uploaded_raw[:24] if f.size > 10 * 1024 * 1024), None)
@@ -587,7 +472,7 @@ if uploaded_raw:
                             pdf_mb=float(size_mb),
                             budget_mb=float(size_budget_mb),
                             dpi=int(dpi),
-                            roentgen_overlay_on=bool(roentgen_overlay),
+                            roentgen=bool(roentgen_overlay),
                         )
                         (st.success if lvl == "green" else st.warning if lvl == "yellow" else st.error)(
                             "KDP-Status: " + lvl.upper()
@@ -616,10 +501,3 @@ if uploaded_raw:
                     st.info("Bitte probiere andere Bilder aus oder reduziere im KDP-Modus die DPI auf 240.")
                     if debug_mode:
                         st.exception(e)
-
-
-            status.success("Buch fertig!")
-            with open(pdf_path, "rb") as f:
-                st.download_button("📥 Buch herunterladen", f.read(), file_name=f"{kind_name}_Welt.pdf", use_container_width=True)
-            with open(pdf_path, "rb") as f:
-                st.download_button("📥 Buch herunterladen", f.read(), file_name=f"{kind_name}_Welt.pdf")
