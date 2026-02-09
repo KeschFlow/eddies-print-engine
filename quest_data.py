@@ -3,7 +3,7 @@
 # - Zones: 8 thematische Lernwelten (00-24h)
 # - Missions: Sportliche Aktivierung + Denkauftrag
 # - XP: Gamification ohne Wettbewerb
-# - Cloud-safe API: compat layer für alte/neue app.py
+# - Cloud-safe API: compat (alte/neue app.py)
 # ==========================================================
 
 from __future__ import annotations
@@ -178,6 +178,24 @@ def pick_mission_for_time(hour: int, difficulty: int, seed: int) -> Mission:
 
 def fmt_hour(hour: int) -> str:
     return f"{hour % 24:02d}:00"
+
+
+def get_hour_color(hour: int) -> Tuple[float, float, float]:
+    """
+    24h-Farb-System: Basis ist die Zonenfarbe.
+    Nachts (21–5) etwas dunkler für Stimmung & bessere Lesbarkeit.
+    """
+    h = hour % 24
+    r, g, b = get_zone_for_hour(h).color
+
+    if h >= 21 or h < 6:
+        factor = 0.55
+        r, g, b = r * factor, g * factor, b * factor
+
+    r = max(0.0, min(1.0, r))
+    g = max(0.0, min(1.0, g))
+    b = max(0.0, min(1.0, b))
+    return (r, g, b)
 
 
 def validate_quest_db():
