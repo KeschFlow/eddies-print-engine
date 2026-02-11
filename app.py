@@ -41,11 +41,6 @@ COVER_SAFE = 0.25 * inch  # allgemeine Safe-Zone fürs Cover (Text/Icons)
 
 HUB_URL = "https://eddieswelt.de"
 
-# Derived sizes
-INTERIOR_W = TRIM + 2 * BLEED
-INTERIOR_H = TRIM + 2 * BLEED
-INTERIOR_PAGE_SIZE = (INTERIOR_W, INTERIOR_H)
-
 # =========================================================
 # 2) STREAMLIT CONFIG + STYLING (SAFE)
 # =========================================================
@@ -70,22 +65,35 @@ st.markdown(
     "<div class='subtitle'>Dein 1-Klick KDP-Publishing-Set: Interior + CoverWrap + Listing-Texte</div>",
     unsafe_allow_html=True,
 )
-st.markdown(
-    f"""
-<div class="kpi-container">
-  <span class="kpi">8,5″ × 8,5″</span>
-  <span class="kpi">Anschnitt 0,125″</span>
-  <span class="kpi">{DPI} DPI druckfertig</span>
-</div>
-""",
-    unsafe_allow_html=True,
-)
 
 # =========================================================
 # 3) HELPERS
 # =========================================================
 def _sanitize_filename(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "file"
+
+
+def _page_geometry(kdp_print_mode: bool):
+    """
+    KDP Printmode:
+      - Page = TRIM + 2*BLEED (8.75")
+      - Safe = BLEED + SAFE_INTERIOR
+    Preview mode:
+      - Page = TRIM only (8.5")
+      - Safe = SAFE_INTERIOR
+    Returns (page_w, page_h, bleed, safe)
+    """
+    if kdp_print_mode:
+        page_w = TRIM + 2 * BLEED
+        page_h = TRIM + 2 * BLEED
+        bleed = BLEED
+        safe = BLEED + SAFE_INTERIOR
+    else:
+        page_w = TRIM
+        page_h = TRIM
+        bleed = 0.0
+        safe = SAFE_INTERIOR
+    return float(page_w), float(page_h), float(bleed), float(safe)
 
 
 def _draw_eddie_brand_pdf(c: canvas.Canvas, cx: float, cy: float, r: float):
@@ -160,13 +168,14 @@ def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Imag
     return pil_img
 
 
-def preflight_uploads_for_300dpi(uploads) -> tuple[int, int, int]:
+def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, int, int]:
     """
-    Check if uploads likely meet 300 DPI full-bleed needs.
-    Returns (ok_count, warn_count, target_px).
+    Check if uploads likely meet 300 DPI needs for the selected mode.
+    Returns (ok_count, warn_count, target_px_short_side).
     """
-    target_inch = float((TRIM + 2 * BLEED) / inch)  # 8.75"
-    target_px = int(round(target_inch * DPI))       # 2625px
+    page_w, page_h, _, _ = _page_geometry(kdp_print_mode)
+    target_inch = min(page_w, page_h) / inch
+    target_px = int(round(target_inch * DPI))
     ok, warn = 0, 0
 
     for up in uploads:
@@ -238,36 +247,102 @@ def build_listing_text(child_name: str) -> str:
         ]
     )
 
-# =========================================================
-# 4) BUILD ENGINES
-# =========================================================
-def build_interior_pdf(child_name: str, uploads, page_count: int, eddie_inside: bool) -> bytes:
-    """Interior PDF: full bleed, no page numbers, deterministic sequence."""
-    page_w = TRIM + 2 * BLEED
-    page_h = TRIM + 2 * BLEED
-    side_px = int(round(float(page_w / inch) * DPI))
 
-    # Deterministic seed (name + file signature)
-    signature = []
-    for u in uploads:
-        signature.append(f"{_sanitize_filename(getattr(u, 'name', 'img'))}:{getattr(u, 'size', 0)}")
-    random.seed((child_name.strip() + "|" + "|".join(signature)).encode("utf-8", errors="ignore"))
+# =========================================================
+# 4) INTERIOR PAGES (INTRO/OUTRO)
+# =========================================================
+def _draw_intro_page(c: canvas.Canvas, child_name: str, page_w: float, page_h: float, safe: float):
+    c.setFillColor(colors.white)
+    c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
+
+    top = page_h - safe
+    bottom = safe
+
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 34)
+    c.drawCentredString(page_w / 2, top - 0.65 * inch, "Willkommen bei Eddie")
+
+    c.setFont("Helvetica", 22)
+    c.drawCentredString(page_w / 2, top - 1.25 * inch, f"& {child_name}")
+
+    r = min(1.35 * inch, (page_w - 2 * safe) * 0.18)
+    _draw_eddie_brand_pdf(c, page_w / 2, (bottom + top) / 2 + 0.1 * inch, r)
+
+    c.setFont("Helvetica-Oblique", 14)
+    c.setFillColor(colors.grey)
+    c.drawCentredString(page_w / 2, bottom + 0.55 * inch, "Male dieses Abenteuer in deinen Farben aus!")
+
+
+def _draw_outro_page(c: canvas.Canvas, child_name: str, page_w: float, page_h: float, safe: float):
+    c.setFillColor(colors.white)
+    c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
+
+    top = page_h - safe
+    bottom = safe
+
+    r = min(1.55 * inch, (page_w - 2 * safe) * 0.20)
+    _draw_eddie_brand_pdf(c, page_w / 2, (bottom + top) / 2 + 0.6 * inch, r)
+
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 30)
+    c.drawCentredString(page_w / 2, bottom + 1.75 * inch, "Quest abgeschlossen!")
+
+    c.setFont("Helvetica", 16)
+    c.setFillColor(colors.grey)
+    c.drawCentredString(page_w / 2, bottom + 1.25 * inch, f"Gut gemacht, {child_name}!")
+
+
+# =========================================================
+# 5) BUILD ENGINES
+# =========================================================
+def build_interior_pdf(
+    child_name: str,
+    uploads,
+    page_count: int,
+    eddie_inside: bool,
+    kdp_print_mode: bool,
+    include_intro: bool,
+    include_outro: bool,
+) -> bytes:
+    """Interior PDF: KDP toggle (bleed on/off), intro/outro, no page numbers, deterministic sequence."""
+    page_w, page_h, _, safe = _page_geometry(kdp_print_mode)
+    side_px = int(round((min(page_w, page_h) / inch) * DPI))
 
     files = list(uploads)
     if not files:
         raise RuntimeError("Bitte mindestens 1 Foto hochladen.")
 
+    fixed = int(include_intro) + int(include_outro)
+    if page_count < max(KDP_MIN_PAGES, fixed + 1):
+        page_count = max(KDP_MIN_PAGES, fixed + 1)
+
+    photo_pages_count = page_count - fixed
+    if photo_pages_count < 1:
+        photo_pages_count = 1
+
+    # Deterministic seed: name + file signature
+    signature = []
+    for u in files:
+        signature.append(f"{_sanitize_filename(getattr(u, 'name', 'img'))}:{getattr(u, 'size', 0)}")
+    random.seed((child_name.strip() + "|" + "|".join(signature)).encode("utf-8", errors="ignore"))
+
     # Ensure enough pages by deterministic repetition/shuffle
     final = list(files)
-    while len(final) < page_count:
+    while len(final) < photo_pages_count:
         tmp = list(files)
         random.shuffle(tmp)
         final.extend(tmp)
-    final = final[:page_count]
+    final = final[:photo_pages_count]
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
 
+    # Intro
+    if include_intro:
+        _draw_intro_page(c, child_name, page_w, page_h, safe)
+        c.showPage()
+
+    # Photo pages
     for up in final:
         try:
             up.seek(0)
@@ -281,9 +356,14 @@ def build_interior_pdf(child_name: str, uploads, page_count: int, eddie_inside: 
             c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
 
         if eddie_inside:
-            m = BLEED + SAFE_INTERIOR
-            _draw_eddie_brand_pdf(c, page_w - m, m, 0.20 * inch)
+            # Bottom-right inside safe zone
+            _draw_eddie_brand_pdf(c, page_w - safe, safe, 0.20 * inch)
 
+        c.showPage()
+
+    # Outro
+    if include_outro:
+        _draw_outro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
 
     c.save()
@@ -371,22 +451,34 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     buf.seek(0)
     return buf.getvalue()
 
+
 # =========================================================
-# 5) SESSION STATE INIT
+# 6) SESSION STATE INIT
 # =========================================================
 if "assets" not in st.session_state:
     st.session_state.assets = None
 
 # =========================================================
-# 6) UI INPUTS (STABLE)
+# 7) UI INPUTS (STABLE)
 # =========================================================
+st.markdown(
+    f"""
+<div class="kpi-container">
+  <span class="kpi">8,5″ × 8,5″</span>
+  <span class="kpi">Anschnitt 0,125″</span>
+  <span class="kpi">{DPI} DPI druckfertig</span>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
 with st.container(border=True):
     col1, col2 = st.columns(2)
     with col1:
         child_name = st.text_input("Vorname des Kindes", value="Eddie", placeholder="z.B. Lukas")
     with col2:
         page_count = st.number_input(
-            "Seitenanzahl (Innen)",
+            "Seitenanzahl (Gesamt, inkl. Intro/Outro)",
             min_value=KDP_MIN_PAGES,
             max_value=300,
             value=DEFAULT_PAGES,
@@ -394,15 +486,29 @@ with st.container(border=True):
         )
 
     paper_type = st.selectbox("Papier-Typ (Spine-Berechnung)", options=list(PAPER_FACTORS.keys()), index=0)
-    eddie_inside = st.toggle("Eddie-Marke auf Innenseiten einblenden", value=False)
+
+    kdp_print_mode = st.toggle("KDP-Druckmodus (Trim + Bleed)", value=True)
+    include_intro = st.toggle("Intro-Seite (Willkommen)", value=True)
+    include_outro = st.toggle("Outro-Seite (Quest abgeschlossen)", value=True)
+
+    eddie_inside = st.toggle("Eddie-Marke auf Foto-Seiten (unten rechts)", value=False)
     uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png"])
 
-    st.caption("Tipp: Für starke Abwechslung 12–24 Fotos. Für volle 300-DPI-Schärfe sollten Fotos mindestens ~2625px an der kürzeren Seite haben.")
+    fixed = int(include_intro) + int(include_outro)
+    photo_pages_hint = max(1, int(page_count) - fixed)
+    page_w, page_h, _, _ = _page_geometry(kdp_print_mode)
+    target_px_hint = int(round((min(page_w, page_h) / inch) * DPI))
+
+    st.caption(
+        f"Tipp: Für starke Abwechslung 12–24 Fotos. "
+        f"Aktuell: **{photo_pages_hint}** Foto-Seiten + **{fixed}** Sonderseiten. "
+        f"Für volle {DPI}-DPI-Schärfe sollten Fotos mindestens **~{target_px_hint}px** an der kürzeren Seite haben."
+    )
 
 can_build = bool(child_name.strip()) and bool(uploads)
 
 # =========================================================
-# 7) BUILD BUTTON
+# 8) BUILD BUTTON
 # =========================================================
 if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
     if not can_build:
@@ -411,10 +517,18 @@ if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
         progress = st.progress(0, text="Starte Build…")
         with st.spinner("Erstelle Preflight, Interior, CoverWrap, Listing & ZIP…"):
             progress.progress(15, text="Preflight-Check…")
-            ok_ct, warn_ct, target_px = preflight_uploads_for_300dpi(uploads)
+            ok_ct, warn_ct, target_px = preflight_uploads_for_300dpi(uploads, kdp_print_mode)
 
             progress.progress(40, text="Render: Interior PDF…")
-            interior_pdf = build_interior_pdf(child_name.strip(), uploads, int(page_count), eddie_inside)
+            interior_pdf = build_interior_pdf(
+                child_name.strip(),
+                uploads,
+                int(page_count),
+                eddie_inside,
+                kdp_print_mode,
+                include_intro,
+                include_outro,
+            )
 
             progress.progress(65, text="Render: CoverWrap PDF…")
             cover_pdf = build_cover_wrap_pdf(child_name.strip(), int(page_count), paper_type)
@@ -447,6 +561,9 @@ if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
                 "target_px": target_px,
                 "name": child_name.strip(),
                 "date": today,
+                "kdp_mode": kdp_print_mode,
+                "intro": include_intro,
+                "outro": include_outro,
             }
 
             progress.progress(100, text="Fertig ✅")
@@ -454,7 +571,7 @@ if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
         st.success("Assets erfolgreich generiert!")
 
 # =========================================================
-# 8) OUTPUT AREA
+# 9) OUTPUT AREA
 # =========================================================
 if st.session_state.assets:
     a = st.session_state.assets
@@ -468,12 +585,14 @@ if st.session_state.assets:
 
         with c2:
             st.markdown("**Preflight:**")
-            st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (für Full-Bleed @ 300 DPI)")
+            st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (für den gewählten Modus @ {DPI} DPI)")
             st.success(f"✅ {a['ok']} Foto(s) erfüllen das Ziel")
             if a["warn"] > 0:
                 st.warning(f"⚠️ {a['warn']} Foto(s) sind wahrscheinlich zu klein – das Buch wird trotzdem gebaut, aber kann weicher wirken.")
-            if len(uploads) < 12:
-                st.info("💡 Tipp: Mehr Fotos erhöhen die Abwechslung im Buch.")
+            st.info(
+                f"Modus: **{'KDP-Druckmodus (mit Bleed)' if a['kdp_mode'] else 'Preview (ohne Bleed)'}** · "
+                f"Intro: **{'an' if a['intro'] else 'aus'}** · Outro: **{'an' if a['outro'] else 'aus'}**"
+            )
 
         st.divider()
         st.markdown("### 📥 Downloads")
@@ -504,7 +623,6 @@ if st.session_state.assets:
     with st.expander("📦 Ready-to-Publish: KDP Listing-Paket (Copy & Paste)", expanded=True):
         st.info("Kopiere diese Texte direkt in dein Amazon KDP Listing.")
         st.code(a["listing"], language="text")
-        st.markdown("**A+ Content (Optional):**\n- Foto vs Skizze\n- Eddie Brand\n- 300 DPI Linien-Detail")
 
 st.markdown(
     f"<div style='text-align:center; margin-top:32px; color:#6b7280; font-size:0.85rem;'>"
