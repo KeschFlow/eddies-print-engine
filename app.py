@@ -1,22 +1,27 @@
 # =========================
-# app.py  (Questbook Edition)
+# app.py  (Questbook Edition) — PRO / Stabil / KDP-Ready
 # =========================
-import streamlit as st
-import cv2
+from __future__ import annotations
+
 import io
 import random
-import zipfile
 import re
-import numpy as np
+import zipfile
 from datetime import datetime
+from typing import Tuple, Dict, Any, List
 
+import streamlit as st
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw
+
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 
 import quest_data as qd  # <-- QUEST SYSTEM
+
 
 # =========================================================
 # 1) BUSINESS & KDP CONFIG
@@ -45,6 +50,7 @@ COVER_SAFE = 0.25 * inch
 
 HUB_URL = "https://eddieswelt.de"
 
+
 # =========================================================
 # 2) STREAMLIT CONFIG + STYLING
 # =========================================================
@@ -67,19 +73,20 @@ small { color: #6b7280; }
 st.markdown(f"<div class='main-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>24h Quest-Malbuch: Foto-Skizzen + Missionen + XP</div>", unsafe_allow_html=True)
 
-# Quest DB sanity
+# Quest DB sanity (nur anzeigen – nicht crashen)
 issues = qd.validate_quest_db()
 if issues:
     st.error("Quest-Datenbank hat Probleme:\n- " + "\n- ".join(issues))
+
 
 # =========================================================
 # 3) HELPERS
 # =========================================================
 def _sanitize_filename(name: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "file"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", (name or "").strip()).strip("_") or "file"
 
 
-def _page_geometry(kdp_print_mode: bool):
+def _page_geometry(kdp_print_mode: bool) -> Tuple[float, float, float, float]:
     """
     KDP Printmode:
       - Page = TRIM + 2*BLEED (8.75")
@@ -110,18 +117,10 @@ def _normalize_page_count(user_pages: int, include_intro: bool, include_outro: b
       - must have room for fixed pages + at least 1 photo page
     """
     pages = int(user_pages)
-    fixed = int(include_intro) + int(include_outro)
-
+    fixed = int(bool(include_intro)) + int(bool(include_outro))
     pages = max(KDP_MIN_PAGES, fixed + 1, pages)
     if pages % 2 != 0:
         pages += 1
-
-    if pages < fixed + 1:
-        pages = fixed + 1
-        if pages % 2 != 0:
-            pages += 1
-        pages = max(KDP_MIN_PAGES, pages)
-
     return pages
 
 
@@ -137,18 +136,17 @@ def _difficulty_from_age(age: int) -> int:
     age = int(age)
     if age <= 4:
         return 1
-    elif age <= 6:
+    if age <= 6:
         return 2
-    elif age <= 9:
+    if age <= 9:
         return 3
-    elif age <= 13:
+    if age <= 13:
         return 4
-    else:
-        return 5
+    return 5
 
 
 def _draw_eddie_brand_pdf(c: canvas.Canvas, cx: float, cy: float, r: float):
-    """Minimal Eddie: B/W + purple tongue."""
+    """Minimal Eddie: B/W + purple tongue (stabil, drucksicher)."""
     c.saveState()
     c.setLineWidth(max(2, r * 0.06))
     c.setStrokeColor(colors.black)
@@ -171,7 +169,7 @@ def _draw_eddie_brand_pdf(c: canvas.Canvas, cx: float, cy: float, r: float):
 
 
 def build_front_cover_preview_png(child_name: str, size_px: int = 900) -> bytes:
-    """Fast, reliable front-cover preview as PNG for UI."""
+    """Fast, reliable front-cover preview as PNG for UI (kein KDP-Cover)."""
     img = Image.new("RGB", (size_px, size_px), "white")
     d = ImageDraw.Draw(img)
 
@@ -215,7 +213,7 @@ def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Imag
     return pil_img.resize((side_px, side_px), Image.LANCZOS)
 
 
-def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, int, int]:
+def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> Tuple[int, int, int]:
     """
     Check if uploads likely meet 300 DPI needs for the selected mode.
     Returns (ok_count, warn_count, target_px_short_side).
@@ -225,7 +223,7 @@ def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, in
     target_px = int(round(target_inch * DPI))
     ok, warn = 0, 0
 
-    for up in uploads:
+    for up in uploads or []:
         try:
             up.seek(0)
             with Image.open(up) as img:
@@ -284,10 +282,11 @@ def build_listing_text(child_name: str) -> str:
         ]
     )
 
+
 # =========================================================
 # 4) QUEST RENDERING (ON EACH PHOTO PAGE)
 # =========================================================
-def _text_color_for_rgb(rgb01):
+def _text_color_for_rgb(rgb01) -> colors.Color:
     r, g, b = rgb01
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     return colors.white if lum < 0.45 else colors.black
@@ -301,7 +300,7 @@ def _draw_quest_overlay(
     hour: int,
     mission: qd.Mission,
 ):
-    # Header band
+    """Header + Mission Card (unten) – alles innerhalb Safe-Zone."""
     header_h = 0.75 * inch
     x0 = safe
     y0 = page_h - safe - header_h
@@ -313,6 +312,8 @@ def _draw_quest_overlay(
     tc = _text_color_for_rgb(zone_rgb)
 
     c.saveState()
+
+    # Header band
     c.setFillColor(fill)
     c.setStrokeColor(colors.black)
     c.setLineWidth(1)
@@ -320,7 +321,11 @@ def _draw_quest_overlay(
 
     c.setFillColor(tc)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(x0 + 0.18 * inch, y0 + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
+    c.drawString(
+        x0 + 0.18 * inch,
+        y0 + header_h - 0.50 * inch,
+        f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}",
+    )
 
     c.setFont("Helvetica", 10)
     c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
@@ -360,6 +365,7 @@ def _draw_quest_overlay(
     c.drawString(bx + box + 0.15 * inch, by + 0.02 * inch, f"PROOF: {mission.proof}")
 
     c.restoreState()
+
 
 # =========================================================
 # 5) INTERIOR PAGES (INTRO/OUTRO + DPI GUARD + QUEST)
@@ -413,6 +419,7 @@ def _draw_dpi_guard_page(
     target_px: int,
     total_uploads: int,
 ):
+    """Nur im Preview-Mode (ohne KDP) – damit KDP Upload sauber bleibt."""
     c.setFillColor(colors.white)
     c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
 
@@ -447,6 +454,14 @@ def _draw_dpi_guard_page(
         c.drawString(left, bottom + 1.35 * inch, "OK: Fotos erfüllen voraussichtlich die 300-DPI-Anforderung.")
 
 
+def _deterministic_base_seed(child_name: str, uploads) -> bytes:
+    """Stabiler Seed über Name + Dateinamen + Größe (keine Dateiinhalte nötig)."""
+    files = list(uploads or [])
+    signature = [f"{_sanitize_filename(getattr(u, 'name', 'img'))}:{getattr(u, 'size', 0)}" for u in files]
+    base_seed_bytes = (child_name.strip() + "|" + "|".join(signature)).encode("utf-8", errors="ignore")
+    return base_seed_bytes
+
+
 def build_interior_pdf(
     child_name: str,
     uploads,
@@ -464,16 +479,15 @@ def build_interior_pdf(
     page_w, page_h, _, safe = _page_geometry(kdp_print_mode)
     side_px = int(round((min(page_w, page_h) / inch) * DPI))
 
-    files = list(uploads)
+    files = list(uploads or [])
     if not files:
         raise RuntimeError("Bitte mindestens 1 Foto hochladen.")
 
-    fixed = int(include_intro) + int(include_outro)
+    fixed = int(bool(include_intro)) + int(bool(include_outro))
     photo_pages_count = max(1, page_count_kdp - fixed)
 
     # Deterministic base seed
-    signature = [f"{_sanitize_filename(getattr(u, 'name', 'img'))}:{getattr(u, 'size', 0)}" for u in files]
-    base_seed_bytes = (child_name.strip() + "|" + "|".join(signature)).encode("utf-8", errors="ignore")
+    base_seed_bytes = _deterministic_base_seed(child_name, files)
     random.seed(base_seed_bytes)
 
     # Deterministic repetition/shuffle to fill pages
@@ -489,15 +503,21 @@ def build_interior_pdf(
 
     # Preview-only QA page
     if (not kdp_print_mode) and (preflight_warn > 0):
-        _draw_dpi_guard_page(c, page_w, page_h, safe, preflight_ok, preflight_warn, preflight_target_px, len(files))
+        _draw_dpi_guard_page(
+            c, page_w, page_h, safe,
+            preflight_ok, preflight_warn, preflight_target_px, len(files)
+        )
         c.showPage()
 
     if include_intro:
         _draw_intro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
 
+    base_int = int.from_bytes(base_seed_bytes[:8].ljust(8, b"\0"), "big", signed=False)
+
     # Photo pages + Quest overlay
     for i, up in enumerate(final):
+        # Hintergrund: Sketch
         try:
             up.seek(0)
             img_bytes = up.read()
@@ -513,7 +533,7 @@ def build_interior_pdf(
 
         # Deterministic mission selection per page
         seed_int = (
-            int.from_bytes(base_seed_bytes[:8].ljust(8, b"\0"), "big", signed=False)
+            base_int
             ^ (hour * 1_000_003)
             ^ (i * 97)
             ^ (int(quest_difficulty) * 10_000_019)
@@ -534,6 +554,7 @@ def build_interior_pdf(
     c.save()
     buf.seek(0)
     return buf.getvalue()
+
 
 # =========================================================
 # 6) COVER
@@ -613,11 +634,13 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     buf.seek(0)
     return buf.getvalue()
 
+
 # =========================================================
 # 7) SESSION STATE
 # =========================================================
 if "assets" not in st.session_state:
     st.session_state.assets = None
+
 
 # =========================================================
 # 8) UI
@@ -659,10 +682,10 @@ with st.container(border=True):
     include_outro = st.toggle("Outro-Seite", value=True)
     eddie_inside = st.toggle("Eddies-Marke extra einblenden", value=False)
 
-    uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png"])
+    uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png", "jpeg"])
 
     normalized_pages = _normalize_page_count(int(user_page_count), include_intro, include_outro)
-    fixed = int(include_intro) + int(include_outro)
+    fixed = int(bool(include_intro)) + int(bool(include_outro))
     photo_pages_hint = max(1, normalized_pages - fixed)
 
     page_w, page_h, _, _ = _page_geometry(kdp_print_mode)
@@ -677,7 +700,8 @@ with st.container(border=True):
     if normalized_pages != int(user_page_count):
         st.info(f"Seitenzahl wird automatisch angepasst: {int(user_page_count)} → {normalized_pages}")
 
-can_build = bool(child_name.strip()) and bool(uploads)
+can_build = bool((child_name or "").strip()) and bool(uploads)
+
 
 # =========================================================
 # 9) BUILD
@@ -721,6 +745,7 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
             progress.progress(96, text="ZIP…")
             today = datetime.now().date().isoformat()
             base = _sanitize_filename(child_name.strip())
+
             zip_buf = io.BytesIO()
             with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
                 z.writestr(f"Interior_{base}_{today}.pdf", interior_pdf)
@@ -750,11 +775,12 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
 
         st.success("Questbuch-Assets erfolgreich generiert!")
 
+
 # =========================================================
 # 10) OUTPUT
 # =========================================================
 if st.session_state.assets:
-    a = st.session_state.assets
+    a: Dict[str, Any] = st.session_state.assets
 
     with st.container(border=True):
         st.markdown("### 👀 Vorschau & Qualitätscheck")
