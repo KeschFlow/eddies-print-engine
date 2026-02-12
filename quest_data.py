@@ -1,3 +1,6 @@
+# =========================
+# quest_data.py
+# =========================
 # ==========================================================
 # QUEST DATABASE (Single Source of Quest Truth) — v2.3
 # - Zones: 8 thematische Lernwelten (00-24h)
@@ -12,19 +15,15 @@ from typing import List, Tuple
 import random
 
 
-# ---------------------------
-# DATA MODELS
-# ---------------------------
-
 @dataclass(frozen=True)
 class Mission:
     id: str
     title: str
-    movement: str        # Sportliche Aufgabe (ortsunabhängig)
-    thinking: str        # Denkauftrag (konvergentes Ziel, mehrere Wege)
-    proof: str           # Nachweis (Haken/Unterschrift/Code)
+    movement: str
+    thinking: str
+    proof: str
     xp: int
-    difficulty: int      # 1..5
+    difficulty: int  # 1..5
 
 
 @dataclass(frozen=True)
@@ -34,14 +33,10 @@ class Zone:
     icon: str
     atmosphere: str
     quest_type: str
-    time_ranges: List[Tuple[int, int]]          # (start, end_exclusive), 0..24
-    color: Tuple[float, float, float]           # RGB 0..1 für PDF Header
+    time_ranges: List[Tuple[int, int]]
+    color: Tuple[float, float, float]
     missions: List[Mission]
 
-
-# ---------------------------
-# ZONES (8-Zonen-System)
-# ---------------------------
 
 ZONES: List[Zone] = [
     Zone(
@@ -152,17 +147,13 @@ ZONES: List[Zone] = [
 ]
 
 
-# ---------------------------
-# CORE API
-# ---------------------------
-
 def get_zone_for_hour(hour: int) -> Zone:
     h = hour % 24
     for z in ZONES:
         for start, end in z.time_ranges:
             if start <= h < end:
                 return z
-    return ZONES[0]  # Fallback
+    return ZONES[0]
 
 
 def pick_mission_for_time(hour: int, difficulty: int, seed: int) -> Mission:
@@ -181,10 +172,6 @@ def fmt_hour(hour: int) -> str:
 
 
 def get_hour_color(hour: int) -> Tuple[float, float, float]:
-    """
-    24h-Farb-System: Basis ist die Zonenfarbe.
-    Nachts (21–5) etwas dunkler für Stimmung & bessere Lesbarkeit.
-    """
     h = hour % 24
     r, g, b = get_zone_for_hour(h).color
 
@@ -213,8 +200,5 @@ def validate_quest_db():
     return issues
 
 
-# ---------------------------
-# COMPAT LAYER
-# ---------------------------
 zone_for_hour = get_zone_for_hour
 pick_mission = pick_mission_for_time
