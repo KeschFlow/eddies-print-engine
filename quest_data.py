@@ -1,24 +1,29 @@
 # =========================
-# quest_data.py
+# quest_data.py  (Platinum v3.1)
 # =========================
 # ==========================================================
-# QUEST DATABASE (Single Source of Quest Truth) — v3.0
-# - Zones: 8 thematische Lernwelten (00-24h)
+# QUEST DATABASE (Single Source of Quest Truth)
+# - Zones: thematische Lernwelten (00–24h)
 # - Missions: Bewegung + Denken + Proof + XP
 # - Difficulty: 1..5
-# - NEW: Audience Modes (kid/adult/senior) via text-adapter
-# - Cloud-safe API: compat mit app.py (get_zone_for_hour, get_hour_color, pick_mission_for_time)
+# - Audience Modes: kid/adult/senior via text-adapter
+# - Cloud-safe API: compat mit app.py
+#   (get_zone_for_hour, get_hour_color, pick_mission_for_time, fmt_hour, validate_quest_db)
 # ==========================================================
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Dict, Iterable
 import random
 import re
 
 Audience = Literal["kid", "adult", "senior"]
 
 
+# ----------------------------------------------------------
+# Models
+# ----------------------------------------------------------
 @dataclass(frozen=True)
 class Mission:
     id: str
@@ -37,13 +42,13 @@ class Zone:
     icon: str
     atmosphere: str
     quest_type: str
-    time_ranges: List[Tuple[int, int]]
-    color: Tuple[float, float, float]
+    time_ranges: List[Tuple[int, int]]  # hours as ints, end is exclusive
+    color: Tuple[float, float, float]  # RGB 0..1
     missions: List[Mission]
 
 
 # ----------------------------------------------------------
-# Base Missions (kid baseline) – your original v2.3 content
+# DB
 # ----------------------------------------------------------
 ZONES: List[Zone] = [
     Zone(
@@ -155,15 +160,52 @@ ZONES: List[Zone] = [
 
 
 # ----------------------------------------------------------
-# Audience text adapters
-# Goal: keep DB lightweight, but make it useful 3..99+
+# Internal utilities (faster + safer)
 # ----------------------------------------------------------
+_WS = re.compile(r"\s+")
+
 def _clean(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip()
+    return _WS.sub(" ", (s or "")).strip()
+
+def _h(hour: int) -> int:
+    return int(hour) % 24
+
+def _in_range(h: int, start: int, end: int) -> bool:
+    """
+    Supports normal ranges (start<end) and wrap ranges (start>end).
+    End is exclusive.
+    Examples:
+      (6,9)   covers 6,7,8
+      (21,24) covers 21,22,23
+      (22,2)  covers 22,23,0,1
+    """
+    start = int(start) % 24
+    end = int(end) % 24
+    if start == end:
+        return True  # treat as full-day (rare but safe)
+    if start < end:
+        return start <= h < end
+    return (h >= start) or (h < end)
 
 
+# Precompute hour->zone for speed + deterministic fallback
+_HOUR_TO_ZONE: Dict[int, Zone] = {}
+for hr in range(24):
+    z_found = None
+    for z in ZONES:
+        for a, b in z.time_ranges:
+            if _in_range(hr, a, b):
+                z_found = z
+                break
+        if z_found:
+            break
+    _HOUR_TO_ZONE[hr] = z_found if z_found else ZONES[0]
+
+
+# ----------------------------------------------------------
+# Audience adapters (text only, DB bleibt klein)
+# ----------------------------------------------------------
 def _adultize(m: Mission) -> Mission:
-    # Adult: same structure, slightly more reflective wording
     movement = _clean(
         m.movement
         .replace("Hampelmänner", "lockere Sprünge (oder zügig gehen)")
@@ -180,11 +222,10 @@ def _adultize(m: Mission) -> Mission:
     )
     proof = _clean(m.proof.replace("✅", "☑️"))
     title = _clean(m.title)
-    return Mission(m.id, title, movement, thinking, proof, m.xp, m.difficulty)
+    return Mission(m.id, title, movement, thinking, proof, int(m.xp), int(m.difficulty))
 
 
 def _seniorize(m: Mission) -> Mission:
-    # Senior: gentle movement + memory prompts + low cognitive load
     movement = _clean(
         m.movement
         .replace("10 Kniebeugen.", "5 langsame Kniebeugen ODER 1 Minute im Raum gehen.")
@@ -203,14 +244,18 @@ def _seniorize(m: Mission) -> Mission:
         .replace("Zeichne", "Beschreibe")
         .replace("Errate", "Nenne")
     )
-    # Add a memory anchor if not present
-    if "ERINNERUNG:" not in thinking:
+    # Ensure prefix only once
+    if not thinking.startswith("ERINNERUNG:"):
         thinking = _clean("ERINNERUNG: " + thinking)
 
-    proof = _clean(m.proof.replace("✅", "☑️").replace("Foto/Skizze", "Notiz").replace("Skizze", "Notiz"))
+    proof = _clean(
+        m.proof
+        .replace("✅", "☑️")
+        .replace("Foto/Skizze", "Notiz")
+        .replace("Skizze", "Notiz")
+    )
     title = _clean(m.title)
-    # Keep XP, difficulty identical
-    return Mission(m.id, title, movement, thinking, proof, m.xp, m.difficulty)
+    return Mission(m.id, title, movement, thinking, proof, int(m.xp), int(m.difficulty))
 
 
 def adapt_mission(m: Mission, audience: Audience) -> Mission:
@@ -222,23 +267,23 @@ def adapt_mission(m: Mission, audience: Audience) -> Mission:
 
 
 # ----------------------------------------------------------
-# API (compat)
+# Public API (compat)
 # ----------------------------------------------------------
 def get_zone_for_hour(hour: int) -> Zone:
-    h = hour % 24
-    for z in ZONES:
-        for start, end in z.time_ranges:
-            if start <= h < end:
-                return z
-    return ZONES[0]
+    """Fast & robust: uses precomputed mapping."""
+    return _HOUR_TO_ZONE[_h(hour)]
 
 
 def fmt_hour(hour: int) -> str:
-    return f"{hour % 24:02d}:00"
+    return f"{_h(hour):02d}:00"
 
 
 def get_hour_color(hour: int) -> Tuple[float, float, float]:
-    h = hour % 24
+    """
+    Returns RGB 0..1.
+    Night hours are slightly darkened for better mood-fit.
+    """
+    h = _h(hour)
     r, g, b = get_zone_for_hour(h).color
 
     # darker at night
@@ -246,45 +291,80 @@ def get_hour_color(hour: int) -> Tuple[float, float, float]:
         factor = 0.55
         r, g, b = r * factor, g * factor, b * factor
 
-    r = max(0.0, min(1.0, r))
-    g = max(0.0, min(1.0, g))
-    b = max(0.0, min(1.0, b))
+    r = max(0.0, min(1.0, float(r)))
+    g = max(0.0, min(1.0, float(g)))
+    b = max(0.0, min(1.0, float(b)))
     return (r, g, b)
 
 
-def pick_mission_for_time(hour: int, difficulty: int, seed: int, audience: Audience = "kid") -> Mission:
+def pick_mission_for_time(
+    hour: int,
+    difficulty: int,
+    seed: int,
+    audience: Audience = "kid",
+) -> Mission:
     """
     Deterministic pick:
     - chooses zone by time
-    - filters missions by difficulty <= target
-    - then adapts text for audience (kid/adult/senior)
+    - filters missions by difficulty <= target (fallback: full zone)
+    - adapts text for audience (kid/adult/senior)
     """
     z = get_zone_for_hour(hour)
-    rng = random.Random(seed)
+    rng = random.Random(int(seed))
 
-    d = int(difficulty)
-    d = max(1, min(5, d))
-
-    pool = [m for m in z.missions if m.difficulty <= d]
-    if not pool:
-        pool = z.missions
+    d = max(1, min(5, int(difficulty)))
+    pool = [m for m in z.missions if int(m.difficulty) <= d] or list(z.missions)
 
     chosen = rng.choice(pool)
     return adapt_mission(chosen, audience)
 
 
-def validate_quest_db():
-    issues = []
+def validate_quest_db() -> List[str]:
+    """
+    Stronger validation:
+    - unique IDs
+    - difficulty 1..5
+    - time-ranges valid
+    - at least one zone per hour (coverage)
+    """
+    issues: List[str] = []
+
+    # Unique zone IDs
     zone_ids = [z.id for z in ZONES]
     if len(zone_ids) != len(set(zone_ids)):
         issues.append("Zone IDs sind nicht eindeutig.")
+
+    # Unique mission IDs (global)
     mission_ids = [m.id for z in ZONES for m in z.missions]
     if len(mission_ids) != len(set(mission_ids)):
         issues.append("Mission IDs sind nicht eindeutig (global).")
+
+    # Mission difficulty bounds
     for z in ZONES:
         for m in z.missions:
-            if not (1 <= m.difficulty <= 5):
+            if not (1 <= int(m.difficulty) <= 5):
                 issues.append(f"Mission '{m.id}' difficulty außerhalb 1..5.")
+
+    # Time ranges validity
+    for z in ZONES:
+        if not z.time_ranges:
+            issues.append(f"Zone '{z.id}' hat keine time_ranges.")
+        for a, b in z.time_ranges:
+            if not isinstance(a, int) or not isinstance(b, int):
+                issues.append(f"Zone '{z.id}' time_ranges müssen int sein: {(a, b)}")
+            # allow wrap; just sanity check
+            if not (0 <= (a % 24) <= 23) or not (0 <= (b % 24) <= 23) and b != 24:
+                issues.append(f"Zone '{z.id}' time_range ungültig: {(a, b)}")
+
+    # Coverage check
+    uncovered = []
+    for hr in range(24):
+        z = _HOUR_TO_ZONE.get(hr)
+        if z is None:
+            uncovered.append(hr)
+    if uncovered:
+        issues.append(f"Nicht alle Stunden abgedeckt: {uncovered}")
+
     return issues
 
 
