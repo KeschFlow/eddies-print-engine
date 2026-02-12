@@ -157,6 +157,9 @@ def get_zone_for_hour(hour: int) -> Zone:
 
 
 def pick_mission_for_time(hour: int, difficulty: int, seed: int) -> Mission:
+    # Clamp difficulty for safety (1..5)
+    difficulty = max(1, min(5, int(difficulty)))
+
     z = get_zone_for_hour(hour)
     rng = random.Random(seed)
 
@@ -175,6 +178,7 @@ def get_hour_color(hour: int) -> Tuple[float, float, float]:
     h = hour % 24
     r, g, b = get_zone_for_hour(h).color
 
+    # Night mood (21–5): darker for atmosphere + readability
     if h >= 21 or h < 6:
         factor = 0.55
         r, g, b = r * factor, g * factor, b * factor
@@ -200,5 +204,12 @@ def validate_quest_db():
     return issues
 
 
+# ---------------------------
+# COMPAT LAYER (alte/neue app.py)
+# ---------------------------
 zone_for_hour = get_zone_for_hour
 pick_mission = pick_mission_for_time
+
+# Optional: explicit aliases for clarity / future refactors
+get_zone_for_hour = get_zone_for_hour
+pick_mission_for_time = pick_mission_for_time
