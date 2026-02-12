@@ -16,18 +16,30 @@ class PageSpec:
     page_w: float
     page_h: float
     bleed: float
-    safe: float  # "safe zone" Abstand vom Rand (inkl. bleed)
+    safe: float  # Abstand vom Trim-Rand (inkl. Bleed)
 
 
 def get_page_spec(*, kdp_mode: bool) -> PageSpec:
     """
-    KDP: 8.5"x8.5" + 0.125" bleed rundum.
-    Safe Zone: mind. 0.375" vom trim-Rand (also bleed + 0.375").
+    KDP Print:
+      - Trim: 8.5" x 8.5"
+      - Bleed: 0.125" rundum
+      - Safe Zone: mind. 0.375" vom Trim-Rand (also bleed + 0.375")
+    Dev:
+      - A4 ohne Bleed
+      - safe = 0.5"
     """
-    bleed = 0.125 * inch if kdp_mode else 0.0
-    page_w = 8.5 * inch + 2 * bleed if kdp_mode else (8.27 * inch)  # ~A4 Breite in inch
-    page_h = 8.5 * inch + 2 * bleed if kdp_mode else (11.69 * inch)  # ~A4 Höhe in inch
-    safe = (bleed + 0.375 * inch) if kdp_mode else (0.5 * inch)
+    if kdp_mode:
+        bleed = 0.125 * inch
+        page_w = 8.5 * inch + 2 * bleed
+        page_h = 8.5 * inch + 2 * bleed
+        safe = bleed + 0.375 * inch
+    else:
+        bleed = 0.0
+        page_w = 8.27 * inch   # ~A4
+        page_h = 11.69 * inch  # ~A4
+        safe = 0.5 * inch
+
     return PageSpec(page_w=page_w, page_h=page_h, bleed=bleed, safe=safe)
 
 
@@ -41,13 +53,17 @@ def draw_box(
     title: Optional[str] = None,
     stroke=colors.black,
     fill=None,
-    title_font="Helvetica-Bold",
-    title_size=12,
+    title_font: str = "Helvetica-Bold",
+    title_size: int = 12,
     padding: float = 8,
 ):
+    """
+    Zeichnet eine Box (x,y links-unten).
+    """
     c.saveState()
     c.setLineWidth(1)
     c.setStrokeColor(stroke)
+
     if fill is not None:
         c.setFillColor(fill)
         c.rect(x, y, w, h, fill=1, stroke=1)
@@ -75,31 +91,29 @@ def embed_image(
     debug_on_error: bool = False,
 ):
     """
-    Einbettet ein Bild (BytesIO) in eine Box:
-    - RAM-only: nutzt BytesIO, speichert nichts.
-    - Auto-Rotation via EXIF.
-    - Zentriert und skaliert (standard: max 50% der Box).
+    Bettet ein Bild (BytesIO) in eine Box ein:
+      - RAM-only
+      - Auto-Rotation via EXIF (Handyfotos)
+      - RGB normalisieren
+      - Skalierung: standardmäßig max 50% der Box (scale_to=0.5)
+      - Zentriert in der Box
+
+    Hinweis: (x,y) ist links-unten der Box.
     """
     try:
         from PIL import Image, ImageOps
 
         img_data.seek(0)
         im = Image.open(img_data)
-
-        # EXIF Auto-Rotation (wichtig bei Handyfotos)
         im = ImageOps.exif_transpose(im)
 
-        # ReportLab mag RGB/Gray – wir normalisieren auf RGB
-        if im.mode not in ("RGB", "L"):
-            im = im.convert("RGB")
-        elif im.mode == "L":
+        if im.mode != "RGB":
             im = im.convert("RGB")
 
         img_w, img_h = im.size
         if img_w <= 0 or img_h <= 0:
             raise ValueError("Ungültige Bilddimensionen.")
 
-        # Skalierung: default nur bis 50% der Box, um Layout zu halten
         target_w = max_w * float(scale_to)
         target_h = max_h * float(scale_to)
 
@@ -111,11 +125,9 @@ def embed_image(
             draw_w = target_w
             draw_h = target_h
 
-        # Zentrieren innerhalb der übergebenen Box
-        dx = (max_w - draw_w) / 2
-        dy = (max_h - draw_h) / 2
+        dx = (max_w - draw_w) / 2.0
+        dy = (max_h - draw_h) / 2.0
 
-        # ImageReader akzeptiert PIL Image direkt (robuster als drawInlineImage(BytesIO))
         c.drawImage(ImageReader(im), x + dx, y + dy, width=draw_w, height=draw_h, mask="auto")
 
     except Exception as e:
@@ -125,5 +137,5 @@ def embed_image(
             c.setFillColor(colors.red)
             c.drawString(x + 8, y + 8, f"Bild-Fehler: {str(e)[:90]}")
             c.restoreState()
-        # Silent-Fallback: Box bleibt leer
+        # Silent fallback
         return
