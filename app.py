@@ -37,7 +37,7 @@ PAPER_FACTORS = {
     "Farbe – Weiß": 0.002347,
 }
 SPINE_TEXT_MIN_PAGES = 79
-COVER_SAFE = 0.25 * inch  # allgemeine Safe-Zone fürs Cover (Text/Icons)
+COVER_SAFE = 0.25 * inch
 
 HUB_URL = "https://eddieswelt.de"
 
@@ -106,14 +106,10 @@ def _normalize_page_count(user_pages: int, include_intro: bool, include_outro: b
     pages = int(user_pages)
     fixed = int(include_intro) + int(include_outro)
 
-    # Minimum pages for KDP + structure
     pages = max(KDP_MIN_PAGES, fixed + 1, pages)
-
-    # KDP interiors must be even page count
     if pages % 2 != 0:
         pages += 1
 
-    # Ensure still enough after rounding
     if pages < fixed + 1:
         pages = fixed + 1
         if pages % 2 != 0:
@@ -131,23 +127,19 @@ def _draw_eddie_brand_pdf(c: canvas.Canvas, cx: float, cy: float, r: float):
     c.setFillColor(colors.white)
     c.circle(cx, cy, r, stroke=1, fill=1)
 
-    # Eyes
     c.setFillColor(colors.black)
     c.circle(cx - r * 0.28, cy + r * 0.15, r * 0.10, stroke=0, fill=1)
     c.circle(cx + r * 0.28, cy + r * 0.15, r * 0.10, stroke=0, fill=1)
 
-    # Smile arc
     c.setLineWidth(max(2, r * 0.05))
     c.arc(cx - r * 0.35, cy - r * 0.10, cx + r * 0.35, cy + r * 0.20, 200, 140)
 
-    # Tongue (purple)
     c.setFillColor(colors.HexColor(EDDIE_PURPLE))
     c.roundRect(cx - r * 0.10, cy - r * 0.35, r * 0.20, r * 0.22, r * 0.08, stroke=0, fill=1)
     c.restoreState()
 
 
 def build_front_cover_preview_png(child_name: str, size_px: int = 900) -> bytes:
-    """Fast, reliable front-cover preview as PNG for UI."""
     img = Image.new("RGB", (size_px, size_px), "white")
     d = ImageDraw.Draw(img)
 
@@ -170,7 +162,6 @@ def build_front_cover_preview_png(child_name: str, size_px: int = 900) -> bytes:
 
 
 def _cv_sketch_from_bytes(img_bytes: bytes) -> np.ndarray:
-    """Bytes -> sketch array (grayscale)."""
     arr = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
     if arr is None:
         raise RuntimeError("Bild konnte nicht dekodiert werden.")
@@ -183,7 +174,6 @@ def _cv_sketch_from_bytes(img_bytes: bytes) -> np.ndarray:
 
 
 def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Image:
-    """Center crop to square and resize to exact px."""
     w, h = pil_img.size
     s = min(w, h)
     left = (w - s) // 2
@@ -194,10 +184,6 @@ def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Imag
 
 
 def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, int, int]:
-    """
-    Check if uploads likely meet 300 DPI needs for the selected mode.
-    Returns (ok_count, warn_count, target_px_short_side).
-    """
     page_w, page_h, _, _ = _page_geometry(kdp_print_mode)
     target_inch = min(page_w, page_h) / inch
     target_px = int(round(target_inch * DPI))
@@ -206,14 +192,15 @@ def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, in
     for up in uploads:
         try:
             up.seek(0)
-            img = Image.open(up)
-            w, h = img.size
+            with Image.open(up) as img:
+                w, h = img.size
             if min(w, h) >= target_px:
                 ok += 1
             else:
                 warn += 1
         except Exception:
             warn += 1
+
     return ok, warn, target_px
 
 
@@ -272,6 +259,7 @@ def build_listing_text(child_name: str) -> str:
         ]
     )
 
+
 # =========================================================
 # 4) INTERIOR PAGES (INTRO/OUTRO + DPI GUARD PAGE)
 # =========================================================
@@ -326,10 +314,6 @@ def _draw_dpi_guard_page(
     target_px: int,
     total_uploads: int,
 ):
-    """
-    QA page (Preview mode only): visible warning if some images likely below 300DPI target.
-    This page is intentionally NOT generated in KDP Print mode.
-    """
     c.setFillColor(colors.white)
     c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
 
@@ -346,7 +330,6 @@ def _draw_dpi_guard_page(
     c.setFillColor(colors.grey)
     c.drawString(left, top - 0.70 * inch, "Diese Seite wird nur im Preview-Modus eingefügt und ist NICHT für KDP-Upload gedacht.")
 
-    # Status box
     box_h = 2.15 * inch
     box_y = top - 0.95 * inch - box_h
     c.setStrokeColor(colors.lightgrey)
@@ -358,12 +341,10 @@ def _draw_dpi_guard_page(
     c.drawString(left + 0.25 * inch, box_y + box_h - 0.45 * inch, "DPI Preflight Ergebnis")
 
     c.setFont("Helvetica", 12)
-    c.setFillColor(colors.black)
     c.drawString(left + 0.25 * inch, box_y + box_h - 0.85 * inch, f"Uploads: {total_uploads}")
     c.drawString(left + 0.25 * inch, box_y + box_h - 1.15 * inch, f"Ziel (kürzere Seite): ≥ {target_px}px (@ {DPI} DPI)")
     c.drawString(left + 0.25 * inch, box_y + box_h - 1.45 * inch, f"OK: {ok_ct}  |  Warnung: {warn_ct}")
 
-    # Big warning if needed
     if warn_ct > 0:
         c.setFillColor(colors.red)
         c.setFont("Helvetica-Bold", 16)
@@ -395,14 +376,6 @@ def build_interior_pdf(
     preflight_warn: int,
     preflight_target_px: int,
 ) -> bytes:
-    """
-    Interior PDF:
-      - Forced KDP compliance applied BEFORE calling this function (page_count_kdp)
-      - KDP toggle (bleed on/off)
-      - Intro/Outro pages
-      - Deterministic sequence
-      - DPI Guard Page: ONLY in Preview mode AND ONLY if warn > 0 (inserted as extra first page)
-    """
     page_w, page_h, _, safe = _page_geometry(kdp_print_mode)
     side_px = int(round((min(page_w, page_h) / inch) * DPI))
 
@@ -413,13 +386,11 @@ def build_interior_pdf(
     fixed = int(include_intro) + int(include_outro)
     photo_pages_count = max(1, page_count_kdp - fixed)
 
-    # Deterministic seed: name + file signature
     signature = []
     for u in files:
         signature.append(f"{_sanitize_filename(getattr(u, 'name', 'img'))}:{getattr(u, 'size', 0)}")
     random.seed((child_name.strip() + "|" + "|".join(signature)).encode("utf-8", errors="ignore"))
 
-    # Ensure enough pages by deterministic repetition/shuffle
     final = list(files)
     while len(final) < photo_pages_count:
         tmp = list(files)
@@ -430,7 +401,6 @@ def build_interior_pdf(
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
 
-    # DPI Guard Page (Preview only, only when warn > 0)
     if (not kdp_print_mode) and (preflight_warn > 0):
         _draw_dpi_guard_page(
             c=c,
@@ -444,12 +414,10 @@ def build_interior_pdf(
         )
         c.showPage()
 
-    # Intro
     if include_intro:
         _draw_intro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
 
-    # Photo pages
     for up in final:
         try:
             up.seek(0)
@@ -467,7 +435,6 @@ def build_interior_pdf(
 
         c.showPage()
 
-    # Outro
     if include_outro:
         _draw_outro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
@@ -478,7 +445,6 @@ def build_interior_pdf(
 
 
 def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> bytes:
-    """CoverWrap: Back + Spine + Front in one PDF (KDP-ready math)."""
     spine_w = _calc_spine_width_inch(page_count, paper_type) * inch
     cov_w = (2 * TRIM) + spine_w + (2 * BLEED)
     cov_h = TRIM + (2 * BLEED)
@@ -493,7 +459,6 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     c.setFillColor(colors.white)
     c.rect(0, 0, cov_w, cov_h, fill=1, stroke=0)
 
-    # BACK
     safe_x = back_x0 + COVER_SAFE
     safe_y = BLEED + COVER_SAFE
     safe_h = TRIM - 2 * COVER_SAFE
@@ -506,7 +471,6 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     c.setFillColor(colors.grey)
     c.drawString(safe_x, safe_y + safe_h - 30, "Erstellt mit dem Eddie Publishing System")
 
-    # Barcode keepout
     box_w, box_h = 2.0 * inch, 1.2 * inch
     box_x = back_x0 + TRIM - COVER_SAFE - box_w
     box_y = BLEED + COVER_SAFE
@@ -517,7 +481,6 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     c.setFillColor(colors.lightgrey)
     c.drawCentredString(box_x + box_w / 2, box_y + box_h / 2 - 3, "Barcode area (KDP)")
 
-    # SPINE
     c.setFillColor(colors.black)
     c.rect(spine_x0, BLEED, spine_w, TRIM, fill=1, stroke=0)
 
@@ -537,7 +500,6 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
             r=min(0.18 * inch, max(spine_w, 0.06 * inch) * 0.35),
         )
 
-    # FRONT
     _draw_eddie_brand_pdf(c, front_x0 + TRIM / 2, BLEED + TRIM * 0.58, r=TRIM * 0.18)
 
     c.setFillColor(colors.black)
@@ -555,14 +517,16 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     buf.seek(0)
     return buf.getvalue()
 
+
 # =========================================================
 # 6) SESSION STATE INIT
 # =========================================================
 if "assets" not in st.session_state:
     st.session_state.assets = None
 
+
 # =========================================================
-# 7) UI INPUTS (STABLE)
+# 7) UI INPUTS
 # =========================================================
 st.markdown(
     f"""
@@ -597,7 +561,6 @@ with st.container(border=True):
     eddie_inside = st.toggle("Eddie-Marke auf Foto-Seiten (unten rechts)", value=False)
     uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png"])
 
-    # Forced compliance preview in UI (what will actually be used)
     normalized_pages = _normalize_page_count(int(user_page_count), include_intro, include_outro)
     fixed = int(include_intro) + int(include_outro)
     photo_pages_hint = max(1, normalized_pages - fixed)
@@ -617,7 +580,7 @@ with st.container(border=True):
 can_build = bool(child_name.strip()) and bool(uploads)
 
 # =========================================================
-# 8) BUILD BUTTON
+# 8) BUILD
 # =========================================================
 if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
     if not can_build:
@@ -625,7 +588,6 @@ if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
     else:
         progress = st.progress(0, text="Starte Build…")
         with st.spinner("Erstelle Preflight, Interior, CoverWrap, Listing & ZIP…"):
-            # Use normalized KDP-compliant page count for everything that is KDP-related (cover spine etc.)
             page_count_kdp = _normalize_page_count(int(user_page_count), include_intro, include_outro)
 
             progress.progress(15, text="Preflight-Check…")
@@ -688,7 +650,7 @@ if st.button("🚀 Publishing-Paket generieren", disabled=not can_build):
         st.success("Assets erfolgreich generiert!")
 
 # =========================================================
-# 9) OUTPUT AREA
+# 9) OUTPUT
 # =========================================================
 if st.session_state.assets:
     a = st.session_state.assets
@@ -706,7 +668,7 @@ if st.session_state.assets:
             st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (für den gewählten Modus @ {DPI} DPI)")
             st.success(f"✅ {a['ok']} Foto(s) erfüllen das Ziel")
             if a["warn"] > 0:
-                st.warning(f"⚠️ {a['warn']} Foto(s) sind wahrscheinlich zu klein – im Preview wird eine QA-Seite eingefügt (nur Preview).")
+                st.warning("⚠️ Einige Fotos sind wahrscheinlich zu klein – im Preview wird eine QA-Seite eingefügt (nur Preview).")
             st.info(
                 f"Modus: **{'KDP-Druckmodus (mit Bleed)' if a['kdp_mode'] else 'Preview (ohne Bleed)'}** · "
                 f"Intro: **{'an' if a['intro'] else 'aus'}** · Outro: **{'an' if a['outro'] else 'aus'}**"
