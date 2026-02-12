@@ -102,7 +102,7 @@ def _page_geometry(kdp_print_mode: bool):
     return float(page_w), float(page_h), float(bleed), float(safe)
 
 
-def _normalize_page_count(user_pages: int, include_intro: bool, include_outro: bool) -> int:
+def _normalize_page_count(user_pages: int, include_intro: bool, include_outro: bool, include_logbook: bool) -> int:
     """
     Forced KDP compliance:
       - min 24
@@ -110,7 +110,7 @@ def _normalize_page_count(user_pages: int, include_intro: bool, include_outro: b
       - must have room for fixed pages + at least 1 photo page
     """
     pages = int(user_pages)
-    fixed = int(include_intro) + int(include_outro)
+    fixed = int(include_intro) + int(include_outro) + int(include_logbook)
 
     pages = max(KDP_MIN_PAGES, fixed + 1, pages)
     if pages % 2 != 0:
@@ -284,6 +284,7 @@ def build_listing_text(child_name: str) -> str:
         ]
     )
 
+
 # =========================================================
 # 4) QUEST RENDERING (ON EACH PHOTO PAGE)
 # =========================================================
@@ -367,7 +368,7 @@ def _draw_quest_overlay(
 
 
 # =========================================================
-# 5) INTERIOR PAGES (INTRO/OUTRO + DPI GUARD + QUEST)
+# 5) INTERIOR PAGES (INTRO/OUTRO + DPI GUARD + QUEST + LOGBOOK)
 # =========================================================
 def _draw_intro_page(c: canvas.Canvas, child_name: str, page_w: float, page_h: float, safe: float):
     c.setFillColor(colors.white)
@@ -452,6 +453,70 @@ def _draw_dpi_guard_page(
         c.drawString(left, bottom + 1.35 * inch, "OK: Fotos erfüllen voraussichtlich die 300-DPI-Anforderung.")
 
 
+def _draw_logbook_page(
+    c: canvas.Canvas,
+    page_w: float,
+    page_h: float,
+    safe: float,
+    missions: list,
+):
+    """
+    1 Logbook-Seite (immer 24 Einträge max, passend zum 24h-Konzept).
+    Wenn das Buch mehr als 24 Quest-Fotoseiten hat, wird unten ein Hinweis angezeigt.
+    """
+    c.setFillColor(colors.white)
+    c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
+
+    # Title
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 24)
+    c.drawCentredString(page_w / 2, page_h - safe - 0.5 * inch, "Quest Logbook")
+
+    # Table headers
+    header_y = page_h - safe - 1.2 * inch
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(safe, header_y, "Stunde")
+    c.drawString(safe + 1.5 * inch, header_y, "Mission")
+    c.drawString(safe + 5.5 * inch, header_y, "XP")
+    c.drawString(safe + 6.5 * inch, header_y, "Erledigt")
+
+    # Header line
+    c.setLineWidth(1)
+    c.line(safe, header_y - 0.1 * inch, page_w - safe, header_y - 0.1 * inch)
+
+    # Rows (max 24)
+    row_h = 0.30 * inch
+    max_rows = 24
+    shown = missions[:max_rows]
+    total_xp = 0
+
+    for i, (hour, mission) in enumerate(shown):
+        y = header_y - (i + 1) * row_h
+        c.setFont("Helvetica", 9)
+        c.drawString(safe, y, qd.fmt_hour(hour))
+        c.drawString(safe + 1.5 * inch, y, mission.title[:40])
+        c.drawString(safe + 5.5 * inch, y, f"+{mission.xp}")
+
+        # Checkbox
+        box = 0.15 * inch
+        c.rect(safe + 6.5 * inch, y + (row_h - box) / 2, box, box, fill=0, stroke=1)
+
+        total_xp += int(mission.xp)
+
+    # Total XP
+    total_y = header_y - (len(shown) + 1) * row_h
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(safe, total_y, "Gesamt XP:")
+    c.drawString(safe + 1.5 * inch, total_y, f"______ / {total_xp}")
+
+    # Overflow hint (if book has more than 24 photo-quests)
+    remaining = max(0, len(missions) - len(shown))
+    if remaining > 0:
+        c.setFont("Helvetica-Oblique", 10)
+        c.setFillColor(colors.grey)
+        c.drawString(safe, total_y - 0.35 * inch, f"Hinweis: +{remaining} weitere Mission(en) im Buch (Logbook zeigt 24h-Übersicht).")
+
+
 def build_interior_pdf(
     child_name: str,
     uploads,
@@ -460,6 +525,7 @@ def build_interior_pdf(
     kdp_print_mode: bool,
     include_intro: bool,
     include_outro: bool,
+    include_logbook: bool,
     preflight_ok: int,
     preflight_warn: int,
     preflight_target_px: int,
@@ -473,7 +539,7 @@ def build_interior_pdf(
     if not files:
         raise RuntimeError("Bitte mindestens 1 Foto hochladen.")
 
-    fixed = int(include_intro) + int(include_outro)
+    fixed = int(include_intro) + int(include_outro) + int(include_logbook)
     photo_pages_count = max(1, page_count_kdp - fixed)
 
     # Deterministic base seed (depends on name + file signatures)
@@ -491,6 +557,7 @@ def build_interior_pdf(
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
+    c.setPageCompression(1)  # smaller PDFs
 
     # Preview-only QA page
     if (not kdp_print_mode) and (preflight_warn > 0):
@@ -498,11 +565,11 @@ def build_interior_pdf(
         c.showPage()
 
     if include_intro:
-        _side = _normalize_page_count(24, True, True)  # no-op, keeps structure stable
         _draw_intro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
 
     # Photo pages + Quest overlay
+    missions = []
     for i, up in enumerate(final):
         try:
             up.seek(0)
@@ -510,6 +577,10 @@ def build_interior_pdf(
             sketch_arr = _cv_sketch_from_bytes(img_bytes)
             pil = Image.fromarray(sketch_arr).convert("L")
             pil = _center_crop_resize_square(pil, side_px)
+
+            # crisp lineart (smaller file + nicer coloring)
+            pil = pil.point(lambda p: 255 if p > 200 else 0).convert("1")
+
             c.drawImage(ImageReader(pil), 0, 0, width=page_w, height=page_h)
         except Exception:
             c.setFillColor(colors.white)
@@ -517,7 +588,6 @@ def build_interior_pdf(
 
         hour = (int(quest_start_hour) + i) % 24
 
-        # Deterministic mission selection per page
         seed_int = (
             int.from_bytes(base_seed_bytes[:8].ljust(8, b"\0"), "big", signed=False)
             ^ (hour * 1_000_003)
@@ -525,6 +595,7 @@ def build_interior_pdf(
             ^ (int(quest_difficulty) * 10_000_019)
         )
         mission = qd.pick_mission_for_time(hour=hour, difficulty=int(quest_difficulty), seed=int(seed_int))
+        missions.append((hour, mission))
 
         _draw_quest_overlay(c, page_w, page_h, safe, hour, mission)
 
@@ -537,9 +608,14 @@ def build_interior_pdf(
         _draw_outro_page(c, child_name, page_w, page_h, safe)
         c.showPage()
 
+    if include_logbook:
+        _draw_logbook_page(c, page_w, page_h, safe, missions)
+        c.showPage()
+
     c.save()
     buf.seek(0)
     return buf.getvalue()
+
 
 # =========================================================
 # 6) COVER
@@ -555,6 +631,7 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(cov_w, cov_h))
+    c.setPageCompression(1)
 
     c.setFillColor(colors.white)
     c.rect(0, 0, cov_w, cov_h, fill=1, stroke=0)
@@ -619,11 +696,13 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
     buf.seek(0)
     return buf.getvalue()
 
+
 # =========================================================
 # 7) SESSION STATE
 # =========================================================
 if "assets" not in st.session_state:
     st.session_state.assets = None
+
 
 # =========================================================
 # 8) UI
@@ -663,12 +742,13 @@ with st.container(border=True):
 
     include_intro = st.toggle("Intro-Seite", value=True)
     include_outro = st.toggle("Outro-Seite", value=True)
+    include_logbook = st.toggle("Logbook-Seite", value=False)
     eddie_inside = st.toggle("Eddies-Marke extra einblenden", value=False)
 
     uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png"])
 
-    normalized_pages = _normalize_page_count(int(user_page_count), include_intro, include_outro)
-    fixed = int(include_intro) + int(include_outro)
+    normalized_pages = _normalize_page_count(int(user_page_count), include_intro, include_outro, include_logbook)
+    fixed = int(include_intro) + int(include_outro) + int(include_logbook)
     photo_pages_hint = max(1, normalized_pages - fixed)
 
     page_w, page_h, _, _ = _page_geometry(bool(kdp_print_mode))
@@ -694,7 +774,7 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
     else:
         progress = st.progress(0, text="Starte Build…")
         with st.spinner("Preflight, Interior, Cover, Listing, ZIP…"):
-            page_count_kdp = _normalize_page_count(int(user_page_count), include_intro, include_outro)
+            page_count_kdp = _normalize_page_count(int(user_page_count), include_intro, include_outro, include_logbook)
 
             progress.progress(15, text="Preflight…")
             ok_ct, warn_ct, target_px = preflight_uploads_for_300dpi(uploads, bool(kdp_print_mode))
@@ -708,6 +788,7 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
                 bool(kdp_print_mode),
                 bool(include_intro),
                 bool(include_outro),
+                bool(include_logbook),
                 preflight_ok=ok_ct,
                 preflight_warn=warn_ct,
                 preflight_target_px=target_px,
