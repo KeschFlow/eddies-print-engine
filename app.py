@@ -10,11 +10,12 @@ import re
 import numpy as np
 from datetime import datetime
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
 
 import quest_data as qd  # <-- QUEST SYSTEM
 
@@ -148,96 +149,109 @@ def _difficulty_from_age(age: int) -> int:
 
 
 # =========================================================
-# 3b) EDDIE ICON (ULTRA SIMPLE PAW) - PDF + PIL
+# 3b) BRAND MARK (Option 2: SIMPLE ICON)
 # =========================================================
 def _draw_eddie_brand_pdf(c: canvas.Canvas, cx: float, cy: float, r: float):
     """
-    Ultra-simple, druckstabiles Icon: Pfote
-    - 4 Zehen (kleine Kreise)
-    - Ballen (großer Kreis/oval)
-    - kleiner purpur Akzent im Ballen als "Eddies Marker"
+    Simple, neutral Eddie brand mark:
+    - Circular badge (B/W)
+    - Simple paw icon
+    - Small purple accent dot
+    No "recognizable dog" shape.
     """
     c.saveState()
 
-    lw = max(2, r * 0.06)
-    c.setLineWidth(lw)
+    # Badge
+    c.setLineWidth(max(2, r * 0.07))
     c.setStrokeColor(colors.black)
-
-    # Sizing
-    toe_r = r * 0.22
-    pad_r = r * 0.45
-
-    # Toe positions (slight arc)
-    toe_y = cy + r * 0.35
-    toe_dx = r * 0.35
-    toe_dx2 = r * 0.12
-
-    toe_centers = [
-        (cx - toe_dx, toe_y),
-        (cx - toe_dx2, toe_y + r * 0.10),
-        (cx + toe_dx2, toe_y + r * 0.10),
-        (cx + toe_dx, toe_y),
-    ]
-
-    # Draw toes (white fill, black outline)
     c.setFillColor(colors.white)
-    for tx, ty in toe_centers:
-        c.circle(tx, ty, toe_r, stroke=1, fill=1)
+    c.circle(cx, cy, r, stroke=1, fill=1)
 
-    # Draw pad (white fill, black outline) as a rounded shape (circle works well)
-    pad_cy = cy - r * 0.10
-    c.circle(cx, pad_cy, pad_r, stroke=1, fill=1)
+    # Paw pads (4 toes + 1 big pad)
+    toe_r = r * 0.11
+    toe_y = cy + r * 0.18
+    toe_dx = r * 0.22
 
-    # Purple accent dot
+    c.setFillColor(colors.black)
+    c.circle(cx - toe_dx, toe_y, toe_r, stroke=0, fill=1)
+    c.circle(cx - toe_dx * 0.33, toe_y + r * 0.06, toe_r, stroke=0, fill=1)
+    c.circle(cx + toe_dx * 0.33, toe_y + r * 0.06, toe_r, stroke=0, fill=1)
+    c.circle(cx + toe_dx, toe_y, toe_r, stroke=0, fill=1)
+
+    pad_w = r * 0.42
+    pad_h = r * 0.34
+    pad_x = cx - pad_w / 2
+    pad_y = cy - r * 0.18 - pad_h / 2
+    c.roundRect(pad_x, pad_y, pad_w, pad_h, r * 0.12, stroke=0, fill=1)
+
+    # Purple accent dot (brand signature)
     c.setFillColor(colors.HexColor(EDDIE_PURPLE))
-    c.setStrokeColor(colors.HexColor(EDDIE_PURPLE))
-    c.circle(cx, pad_cy, pad_r * 0.18, stroke=0, fill=1)
+    dot_r = r * 0.07
+    c.circle(cx, cy - r * 0.34, dot_r, stroke=0, fill=1)
 
     c.restoreState()
 
 
-def _draw_eddie_brand_pil(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int):
-    """PIL-Variante der Pfote (für Preview-PNG)."""
-    lw = max(4, r // 10)
-
-    toe_r = int(r * 0.22)
-    pad_r = int(r * 0.45)
-
-    toe_y = cy + int(r * 0.35)
-    toe_dx = int(r * 0.35)
-    toe_dx2 = int(r * 0.12)
-
-    toe_centers = [
-        (cx - toe_dx, toe_y),
-        (cx - toe_dx2, toe_y + int(r * 0.10)),
-        (cx + toe_dx2, toe_y + int(r * 0.10)),
-        (cx + toe_dx, toe_y),
-    ]
-
-    for tx, ty in toe_centers:
-        draw.ellipse((tx - toe_r, ty - toe_r, tx + toe_r, ty + toe_r), outline="black", width=lw, fill="white")
-
-    pad_cy = cy - int(r * 0.10)
-    draw.ellipse((cx - pad_r, pad_cy - pad_r, cx + pad_r, pad_cy + pad_r), outline="black", width=lw, fill="white")
-
-    # Purple accent dot
-    dot_r = max(2, int(pad_r * 0.18))
-    draw.ellipse((cx - dot_r, pad_cy - dot_r, cx + dot_r, pad_cy + dot_r), fill=EDDIE_PURPLE, outline=None)
-
-
 def build_front_cover_preview_png(child_name: str, size_px: int = 900) -> bytes:
-    """Fast, reliable front-cover preview as PNG for UI."""
+    """Fast, reliable front-cover preview as PNG for UI (matches the simple paw badge)."""
     img = Image.new("RGB", (size_px, size_px), "white")
     d = ImageDraw.Draw(img)
 
-    cx, cy = size_px // 2, int(size_px * 0.52)
-    r = int(size_px * 0.18)
+    cx, cy = size_px // 2, int(size_px * 0.50)
+    r = int(size_px * 0.22)
 
-    _draw_eddie_brand_pil(d, cx, cy, r)
+    # Badge
+    outline_w = max(6, r // 10)
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), outline="black", width=outline_w, fill="white")
 
-    d.text((size_px * 0.5, size_px * 0.16), "EDDIES", fill="black", anchor="mm")
-    d.text((size_px * 0.5, size_px * 0.21), f"& {child_name}", fill=(90, 90, 90), anchor="mm")
-    d.text((size_px * 0.5, size_px * 0.88), "24h Quest-Malbuch", fill=(120, 120, 120), anchor="mm")
+    # Paw (4 toes + pad)
+    toe_r = int(r * 0.11)
+    toe_y = int(cy - r * 0.10)
+    toe_dx = int(r * 0.22)
+
+    d.ellipse((cx - toe_dx - toe_r, toe_y - toe_r, cx - toe_dx + toe_r, toe_y + toe_r), fill="black")
+    d.ellipse(
+        (
+            cx - int(toe_dx * 0.33) - toe_r,
+            toe_y - int(r * 0.06) - toe_r,
+            cx - int(toe_dx * 0.33) + toe_r,
+            toe_y - int(r * 0.06) + toe_r,
+        ),
+        fill="black",
+    )
+    d.ellipse(
+        (
+            cx + int(toe_dx * 0.33) - toe_r,
+            toe_y - int(r * 0.06) - toe_r,
+            cx + int(toe_dx * 0.33) + toe_r,
+            toe_y - int(r * 0.06) + toe_r,
+        ),
+        fill="black",
+    )
+    d.ellipse((cx + toe_dx - toe_r, toe_y - toe_r, cx + toe_dx + toe_r, toe_y + toe_r), fill="black")
+
+    pad_w = int(r * 0.46)
+    pad_h = int(r * 0.36)
+    pad_x0 = cx - pad_w // 2
+    pad_y0 = cy + int(r * 0.05)
+    d.rounded_rectangle((pad_x0, pad_y0, pad_x0 + pad_w, pad_y0 + pad_h), radius=int(r * 0.12), fill="black")
+
+    # Purple dot accent
+    dot_r = int(r * 0.07)
+    d.ellipse(
+        (
+            cx - dot_r,
+            cy + int(r * 0.52) - dot_r,
+            cx + dot_r,
+            cy + int(r * 0.52) + dot_r,
+        ),
+        fill=EDDIE_PURPLE,
+    )
+
+    # Titles
+    d.text((size_px * 0.5, size_px * 0.14), "EDDIES", fill="black", anchor="mm")
+    d.text((size_px * 0.5, size_px * 0.20), f"& {child_name}", fill=(90, 90, 90), anchor="mm")
+    d.text((size_px * 0.5, size_px * 0.90), "24h Quest-Malbuch", fill=(120, 120, 120), anchor="mm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -264,6 +278,26 @@ def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Imag
     top = (h - s) // 2
     pil_img = pil_img.crop((left, top, left + s, top + s))
     return pil_img.resize((side_px, side_px), Image.LANCZOS)
+
+
+# =========================================================
+# 3c) FILESIZE / DOWNLOAD OPTIMIZATION (PDF + ZIP)
+# =========================================================
+def _sketch_to_print_lineart(pil_l: Image.Image, threshold: int = 210) -> Image.Image:
+    """
+    Convert grayscale sketch to crisp, very small line-art (1-bit).
+    Greatly reduces PDF size and speeds up ZIP download.
+    """
+    pil_l = ImageOps.autocontrast(pil_l)
+    pil_l = pil_l.point(lambda p: 255 if p > threshold else 0)
+    return pil_l.convert("1")  # 1-bit B/W
+
+
+def _pil_to_png_bytes(pil_img: Image.Image, optimize: bool = True) -> bytes:
+    bio = io.BytesIO()
+    # PNG keeps edges crisp; for line-art in "1" mode it compresses very well.
+    pil_img.save(bio, format="PNG", optimize=optimize)
+    return bio.getvalue()
 
 
 def preflight_uploads_for_300dpi(uploads, kdp_print_mode: bool) -> tuple[int, int, int]:
@@ -319,7 +353,7 @@ def build_listing_text(child_name: str) -> str:
   <li><b>Quest-System:</b> Zeit → Zone → Mission (Gamification ohne Wettbewerb).</li>
   <li><b>Profi-Druck:</b> Optimiert für 300 DPI, KDP-kompatibel.</li>
 </ul>
-<p><i>Eddies bleibt als schwarz-weißer Referenzpunkt mit purpurfarbenem Marker – dein Kind macht die Welt bunt.</i></p>
+<p><i>Eddies bleibt als schwarz-weißer Referenzpunkt mit purpurfarbener Signatur – dein Kind macht die Welt bunt.</i></p>
 """
     return "\n".join(
         [
@@ -337,12 +371,80 @@ def build_listing_text(child_name: str) -> str:
 
 
 # =========================================================
-# 4) QUEST RENDERING (ON EACH PHOTO PAGE)
+# 4) QUEST RENDERING (ON EACH PHOTO PAGE) + TEXT WRAP
 # =========================================================
 def _text_color_for_rgb(rgb01):
     r, g, b = rgb01
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     return colors.white if lum < 0.45 else colors.black
+
+
+def _wrap_text_to_lines(text: str, font_name: str, font_size: int, max_width: float) -> list[str]:
+    """
+    Word-wrap for ReportLab using stringWidth.
+    """
+    text = (text or "").strip()
+    if not text:
+        return [""]
+
+    words = text.split()
+    lines = []
+    cur = ""
+
+    for w in words:
+        test = (cur + " " + w).strip()
+        if pdfmetrics.stringWidth(test, font_name, font_size) <= max_width:
+            cur = test
+        else:
+            if cur:
+                lines.append(cur)
+                cur = w
+            else:
+                # single very long word: hard cut
+                cut = w
+                while cut and pdfmetrics.stringWidth(cut, font_name, font_size) > max_width:
+                    cut = cut[:-1]
+                lines.append(cut or w[:1])
+                cur = w[len(cut) :] if cut else w[1:]
+
+    if cur:
+        lines.append(cur)
+
+    return lines
+
+
+def _draw_wrapped(
+    c: canvas.Canvas,
+    text: str,
+    x: float,
+    y_top: float,
+    max_w: float,
+    font_name: str,
+    font_size: int,
+    leading: float,
+    max_lines: int,
+) -> float:
+    """
+    Draw wrapped text starting at y_top (top baseline-ish),
+    returns new y after drawing.
+    """
+    lines = _wrap_text_to_lines(text, font_name, font_size, max_w)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        # add ellipsis if still too wide
+        if lines:
+            base = lines[-1].rstrip(".")
+            ell = "…"
+            while base and pdfmetrics.stringWidth(base + ell, font_name, font_size) > max_w:
+                base = base[:-1]
+            lines[-1] = (base + ell) if base else ell
+
+    c.setFont(font_name, font_size)
+    y = y_top
+    for ln in lines:
+        c.drawString(x, y, ln)
+        y -= leading
+    return y
 
 
 def _draw_quest_overlay(
@@ -377,8 +479,8 @@ def _draw_quest_overlay(
     c.setFont("Helvetica", 10)
     c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
 
-    # Mission card bottom
-    card_h = 2.05 * inch
+    # Mission card bottom (slightly taller to allow wrapping)
+    card_h = 2.35 * inch
     cy = safe
     c.setFillColor(colors.white)
     c.setStrokeColor(colors.black)
@@ -391,25 +493,70 @@ def _draw_quest_overlay(
     c.setFont("Helvetica-Bold", 11)
     c.drawRightString(x0 + w - 0.18 * inch, cy + card_h - 0.45 * inch, f"+{mission.xp} XP")
 
-    # Movement / Thinking
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(x0 + 0.18 * inch, cy + card_h - 0.85 * inch, "BEWEGUNG:")
-    c.setFont("Helvetica", 10)
-    c.drawString(x0 + 1.05 * inch, cy + card_h - 0.85 * inch, mission.movement)
+    # Layout for wrapped lines
+    left_pad = 0.18 * inch
+    right_pad = 0.18 * inch
+    label_x = x0 + left_pad
+    value_x_move = x0 + 1.05 * inch
+    value_x_think = x0 + 0.90 * inch
+    value_max_w_move = (x0 + w - right_pad) - value_x_move
+    value_max_w_think = (x0 + w - right_pad) - value_x_think
+    leading = 12
 
+    # Bewegung (wrapped)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(x0 + 0.18 * inch, cy + card_h - 1.20 * inch, "DENKEN:")
-    c.setFont("Helvetica", 10)
-    c.drawString(x0 + 0.90 * inch, cy + card_h - 1.20 * inch, mission.thinking)
+    y_move = cy + card_h - 0.90 * inch
+    c.drawString(label_x, y_move, "BEWEGUNG:")
+    _draw_wrapped(
+        c,
+        mission.movement,
+        value_x_move,
+        y_move,
+        value_max_w_move,
+        font_name="Helvetica",
+        font_size=10,
+        leading=leading,
+        max_lines=2,
+    )
 
-    # Proof checkbox line
+    # Denken (wrapped)
+    y_think = cy + card_h - 1.35 * inch
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(label_x, y_think, "DENKEN:")
+    _draw_wrapped(
+        c,
+        mission.thinking,
+        value_x_think,
+        y_think,
+        value_max_w_think,
+        font_name="Helvetica",
+        font_size=10,
+        leading=leading,
+        max_lines=2,
+    )
+
+    # Proof checkbox + wrapped proof text
     box = 0.20 * inch
-    bx = x0 + 0.18 * inch
+    bx = x0 + left_pad
     by = cy + 0.35 * inch
     c.setStrokeColor(colors.black)
     c.rect(bx, by, box, box, fill=0, stroke=1)
+
+    proof_x = bx + box + 0.15 * inch
+    proof_max_w = (x0 + w - right_pad) - proof_x
+
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(bx + box + 0.15 * inch, by + 0.02 * inch, f"PROOF: {mission.proof}")
+    _draw_wrapped(
+        c,
+        f"PROOF: {mission.proof}",
+        proof_x,
+        by + 0.02 * inch,
+        proof_max_w,
+        font_name="Helvetica-Bold",
+        font_size=10,
+        leading=leading,
+        max_lines=2,
+    )
 
     c.restoreState()
 
@@ -513,6 +660,8 @@ def build_interior_pdf(
     preflight_target_px: int,
     quest_start_hour: int,
     quest_difficulty: int,
+    optimize_filesize: bool,
+    lineart_threshold: int,
 ) -> bytes:
     page_w, page_h, _, safe = _page_geometry(kdp_print_mode)
     side_px = int(round((min(page_w, page_h) / inch) * DPI))
@@ -555,9 +704,17 @@ def build_interior_pdf(
             up.seek(0)
             img_bytes = up.read()
             sketch_arr = _cv_sketch_from_bytes(img_bytes)
+
             pil = Image.fromarray(sketch_arr).convert("L")
             pil = _center_crop_resize_square(pil, side_px)
-            c.drawImage(ImageReader(pil), 0, 0, width=page_w, height=page_h)
+
+            # ---- FILESIZE OPT: convert to crisp line-art and embed as compressed PNG bytes
+            if optimize_filesize:
+                pil = _sketch_to_print_lineart(pil, threshold=int(lineart_threshold))
+
+            png_bytes = _pil_to_png_bytes(pil, optimize=True)
+            c.drawImage(ImageReader(io.BytesIO(png_bytes)), 0, 0, width=page_w, height=page_h)
+
         except Exception:
             c.setFillColor(colors.white)
             c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
@@ -652,12 +809,12 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
         )
 
     # FRONT
-    _draw_eddie_brand_pdf(c, front_x0 + TRIM / 2, BLEED + TRIM * 0.56, r=TRIM * 0.18)
+    _draw_eddie_brand_pdf(c, front_x0 + TRIM / 2, BLEED + TRIM * 0.58, r=TRIM * 0.18)
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 44)
-    c.drawCentredString(front_x0 + TRIM / 2, BLEED + TRIM * 0.82, "EDDIES")
+    c.drawCentredString(front_x0 + TRIM / 2, BLEED + TRIM * 0.80, "EDDIES")
     c.setFont("Helvetica", 18)
-    c.drawCentredString(front_x0 + TRIM / 2, BLEED + TRIM * 0.75, f"& {child_name}")
+    c.drawCentredString(front_x0 + TRIM / 2, BLEED + TRIM * 0.73, f"& {child_name}")
 
     c.setFont("Helvetica", 12)
     c.setFillColor(colors.grey)
@@ -728,6 +885,22 @@ with st.container(border=True):
     include_outro = st.toggle("Outro-Seite", value=True)
     eddie_inside = st.toggle("Eddies-Marke extra einblenden", value=False)
 
+    # ✅ 1) Download/PDF size optimization controls
+    optimize_filesize = st.toggle(
+        "Dateigröße optimieren (schneller Download)",
+        value=True,
+        help="Wandelt die Skizzen in sehr kleine, drucksaubere Line-Art um. Empfohlen für ZIP/KDP.",
+    )
+    lineart_threshold = st.slider(
+        "Linien-Stärke (nur wenn optimiert)",
+        min_value=170,
+        max_value=240,
+        value=210,
+        step=5,
+        help="Höher = weniger Details (heller). Niedriger = mehr Details (dunkler).",
+        disabled=not optimize_filesize,
+    )
+
     uploads = st.file_uploader("Fotos hochladen (min. 1)", accept_multiple_files=True, type=["jpg", "png"])
 
     normalized_pages = _normalize_page_count(int(user_page_count), include_intro, include_outro)
@@ -777,6 +950,8 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
                 preflight_target_px=target_px,
                 quest_start_hour=int(quest_start_hour),
                 quest_difficulty=int(quest_difficulty),
+                optimize_filesize=bool(optimize_filesize),
+                lineart_threshold=int(lineart_threshold),
             )
 
             progress.progress(70, text="CoverWrap…")
@@ -788,11 +963,18 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
             progress.progress(90, text="Listing…")
             listing_txt = build_listing_text(child_name.strip())
 
-            progress.progress(96, text="ZIP…")
+            progress.progress(96, text="ZIP (max compression)…")
             today = datetime.now().date().isoformat()
             base = _sanitize_filename(child_name.strip())
             zip_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
+
+            # ✅ 2) ZIP stronger compression when available (fallback safe)
+            try:
+                zf = zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9)
+            except TypeError:
+                zf = zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED)
+
+            with zf as z:
                 z.writestr(f"Interior_{base}_{today}.pdf", interior_pdf)
                 z.writestr(f"CoverWrap_{base}_{today}.pdf", cover_pdf)
                 z.writestr(f"Listing_{base}_{today}.txt", listing_txt)
@@ -814,6 +996,8 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
                 "pages_kdp": int(page_count_kdp),
                 "age": int(child_age),
                 "difficulty": int(quest_difficulty),
+                "optimize": bool(optimize_filesize),
+                "thr": int(lineart_threshold),
             }
 
             progress.progress(100, text="Fertig ✅")
@@ -840,6 +1024,9 @@ if st.session_state.assets:
             st.write(f"Alter: **{a['age']}**  |  Quest-Stufe (auto): **{a['difficulty']}**")
             st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (@ {DPI} DPI)")
             st.success(f"✅ {a['ok']} Foto(s) erfüllen das Ziel")
+
+            if a.get("optimize"):
+                st.info(f"📦 Optimierung aktiv (Linien-Schwelle: {a.get('thr')}) → kleinere PDFs/ZIP, schnellerer Download.")
 
             if a["warn"] > 0:
                 if a.get("kdp_mode", False):
