@@ -1,18 +1,23 @@
 # ✏️ Eddie’s Welt – Kids Activity Book Generator
 
-**Eddie’s Welt** ist eine Streamlit-App, die aus Fotos ein personalisiertes **24-Stunden-Malbuch** als PDF erzeugt.  
-Optimiert für Heimdruck (A4) und optional für **Amazon KDP** (8.5" × 8.5" mit Bleed/Anschnitt, Preflight-Check und Röntgen-Overlay).
+**Eddie’s Welt** ist eine Streamlit-App, die aus Fotos ein personalisiertes **Kids Activity / Malbuch** als PDF erzeugt.  
+Optional erzeugt sie außerdem ein **KDP-kompatibles** Interior (8.5" × 8.5" mit Bleed/Anschnitt) inkl. **Preflight** und **QA-Warnseite** (nur Preview).
 
 ---
 
 ## ✅ Features
 
-- **Smart-Sort (EXIF):** Chronologische Sortierung, wenn EXIF vorhanden (sonst Upload-Reihenfolge)
 - **Sketch-Engine:** Foto → kontrastreiche Schwarz-Weiß-Skizze zum Ausmalen
-- **KDP-Ready:** 8.5" × 8.5" + **Bleed 0.125"** + Safe-Area / Trim-Overlay
-- **Preflight-Ampel:** Bleed, Safe-Area, DPI und PDF-Budget (mit Gelb-Puffer)
-- **Budget-Bremse:** Dynamische JPEG-Kompression für stabile PDF-Größen
-- **Privacy-First:** Verarbeitung nur temporär (keine dauerhafte Speicherung)
+- **KDP-Printmode Toggle:**  
+  - **Preview Mode:** 8.5" × 8.5" (wie später sichtbar)  
+  - **KDP Print Mode:** 8.75" × 8.75" (8.5" Trim + 0.125" Bleed je Seite)
+- **Safe-Zone korrekt:** Safe Zone wird im Print-Mode um den Bleed verschoben
+- **Forced KDP Compliance:** Erzwingt **min. 24 Seiten** + **gerade Seitenzahl**
+- **Preflight (300 DPI Ziel):** Prüft Upload-Auflösung und warnt bei zu kleinen Bildern
+- **DPI-Guard QA-Seite:** Wenn Bilder zu klein sind, wird im **Preview Mode** automatisch eine **Warnseite** vorn eingefügt (nicht für KDP-Upload gedacht)
+- **CoverWrap PDF:** Back + Spine + Front in einer Datei, Spine-Breite berechnet, Barcode-Keepout, Spine-Text erst ab 79 Seiten
+- **Listing.txt:** Ready-to-publish KDP Listing-Textbundle
+- **Privacy-First:** Verarbeitung nur im RAM (keine dauerhafte Speicherung)
 
 ---
 
@@ -22,13 +27,22 @@ Optimiert für Heimdruck (A4) und optional für **Amazon KDP** (8.5" × 8.5" mit
 - OpenCV (headless)
 - Pillow
 - ReportLab
-- qrcode
+
+> Hinweis: `qrcode` nur aufführen, wenn du es wirklich im Code nutzt. Sonst weglassen.
 
 ---
 
 ## 🚀 Schnellstart (Lokal)
 
-1) Repository klonen:
 ```bash
 git clone https://github.com/KeschFlow/kids-activity-book-generator.git
 cd kids-activity-book-generator
+
+python -m venv .venv
+# macOS / Linux:
+source .venv/bin/activate
+# Windows PowerShell:
+# .venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+streamlit run app.py
