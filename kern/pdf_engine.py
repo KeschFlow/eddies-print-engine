@@ -1,71 +1,129 @@
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
-from reportlab.lib import colors
+# kern/pdf_engine.py
+from __future__ import annotations
+
 import io
+from dataclasses import dataclass
+from typing import Optional
 
-# Standard Print Geometry
-TRIM = 8.5 * inch
-BLEED = 0.125 * inch
-SAFE = 0.375 * inch
-
-
-def get_geometry(kdp_mode=True):
-    if kdp_mode:
-        page_w = TRIM + 2 * BLEED
-        page_h = TRIM + 2 * BLEED
-        safe = BLEED + SAFE
-    else:
-        page_w = TRIM
-        page_h = TRIM
-        safe = SAFE
-
-    return page_w, page_h, safe
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
 
 
-def draw_brand_mark(c: canvas.Canvas, cx, cy, r):
+@dataclass(frozen=True)
+class PageSpec:
+    page_w: float
+    page_h: float
+    bleed: float
+    safe: float  # "safe zone" Abstand vom Rand (inkl. bleed)
+
+
+def get_page_spec(*, kdp_mode: bool) -> PageSpec:
+    """
+    KDP: 8.5"x8.5" + 0.125" bleed rundum.
+    Safe Zone: mind. 0.375" vom trim-Rand (also bleed + 0.375").
+    """
+    bleed = 0.125 * inch if kdp_mode else 0.0
+    page_w = 8.5 * inch + 2 * bleed if kdp_mode else (8.27 * inch)  # ~A4 Breite in inch
+    page_h = 8.5 * inch + 2 * bleed if kdp_mode else (11.69 * inch)  # ~A4 Höhe in inch
+    safe = (bleed + 0.375 * inch) if kdp_mode else (0.5 * inch)
+    return PageSpec(page_w=page_w, page_h=page_h, bleed=bleed, safe=safe)
+
+
+def draw_box(
+    c: canvas.Canvas,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    *,
+    title: Optional[str] = None,
+    stroke=colors.black,
+    fill=None,
+    title_font="Helvetica-Bold",
+    title_size=12,
+    padding: float = 8,
+):
     c.saveState()
-    c.setLineWidth(3)
-    c.setStrokeColor(colors.black)
-    c.setFillColor(colors.white)
-    c.circle(cx, cy, r, stroke=1, fill=1)
+    c.setLineWidth(1)
+    c.setStrokeColor(stroke)
+    if fill is not None:
+        c.setFillColor(fill)
+        c.rect(x, y, w, h, fill=1, stroke=1)
+    else:
+        c.rect(x, y, w, h, fill=0, stroke=1)
 
-    # Paw center
-    c.setFillColor(colors.black)
-    c.circle(cx, cy, r * 0.3, fill=1)
-
-    # Toes
-    c.circle(cx - r * 0.3, cy + r * 0.35, r * 0.18, fill=1)
-    c.circle(cx + r * 0.3, cy + r * 0.35, r * 0.18, fill=1)
-    c.circle(cx - r * 0.1, cy + r * 0.55, r * 0.15, fill=1)
-    c.circle(cx + r * 0.1, cy + r * 0.55, r * 0.15, fill=1)
+    if title:
+        c.setFont(title_font, title_size)
+        c.setFillColor(colors.black)
+        c.drawString(x + padding, y + h - title_size - padding / 2, title)
 
     c.restoreState()
 
 
-def build_simple_vocab_pdf(subject_name, vocab_list):
-    buffer = io.BytesIO()
-    page_w, page_h, safe = get_geometry(False)
-    c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
+def embed_image(
+    c: canvas.Canvas,
+    *,
+    img_data: io.BytesIO,
+    x: float,
+    y: float,
+    max_w: float,
+    max_h: float,
+    preserve_aspect: bool = True,
+    scale_to: float = 0.5,
+    debug_on_error: bool = False,
+):
+    """
+    Einbettet ein Bild (BytesIO) in eine Box:
+    - RAM-only: nutzt BytesIO, speichert nichts.
+    - Auto-Rotation via EXIF.
+    - Zentriert und skaliert (standard: max 50% der Box).
+    """
+    try:
+        from PIL import Image, ImageOps
 
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(page_w / 2, page_h - safe, subject_name)
+        img_data.seek(0)
+        im = Image.open(img_data)
 
-    y = page_h - safe - 60
+        # EXIF Auto-Rotation (wichtig bei Handyfotos)
+        im = ImageOps.exif_transpose(im)
 
-    for item in vocab_list:
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(safe, y, item["wort"])
+        # ReportLab mag RGB/Gray – wir normalisieren auf RGB
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        elif im.mode == "L":
+            im = im.convert("RGB")
 
-        y -= 25
-        c.setFont("Helvetica", 14)
-        c.drawString(safe + 20, y, item["satz"])
+        img_w, img_h = im.size
+        if img_w <= 0 or img_h <= 0:
+            raise ValueError("Ungültige Bilddimensionen.")
 
-        y -= 40
+        # Skalierung: default nur bis 50% der Box, um Layout zu halten
+        target_w = max_w * float(scale_to)
+        target_h = max_h * float(scale_to)
 
-        if y < safe:
-            c.showPage()
-            y = page_h - safe - 60
+        if preserve_aspect:
+            scale = min(target_w / img_w, target_h / img_h)
+            draw_w = img_w * scale
+            draw_h = img_h * scale
+        else:
+            draw_w = target_w
+            draw_h = target_h
 
-    c.save()
-    buffer.seek(0)
-    return buffer.getvalue()
+        # Zentrieren innerhalb der übergebenen Box
+        dx = (max_w - draw_w) / 2
+        dy = (max_h - draw_h) / 2
+
+        # ImageReader akzeptiert PIL Image direkt (robuster als drawInlineImage(BytesIO))
+        c.drawImage(ImageReader(im), x + dx, y + dy, width=draw_w, height=draw_h, mask="auto")
+
+    except Exception as e:
+        if debug_on_error:
+            c.saveState()
+            c.setFont("Helvetica", 9)
+            c.setFillColor(colors.red)
+            c.drawString(x + 8, y + 8, f"Bild-Fehler: {str(e)[:90]}")
+            c.restoreState()
+        # Silent-Fallback: Box bleibt leer
+        return
