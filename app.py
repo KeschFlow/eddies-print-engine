@@ -698,6 +698,7 @@ if st.session_state.assets:
             st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (@ {DPI} DPI)")
             st.success(f"✅ {a['ok']} Foto(s) erfüllen das Ziel")
             if a["warn"] > 0:
+   if a["warn"] > 0:
     if a.get("kdp_mode", False):
         st.warning("⚠️ Einige Fotos sind wahrscheinlich zu klein – KDP-Export wird trotzdem erzeugt, kann aber weicher wirken.")
     else:
