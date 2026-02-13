@@ -1,7 +1,7 @@
 # kern/pdf_engine.py
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm, inch
 from reportlab.pdfgen import canvas
 
 def get_page_spec(mode: str):
@@ -12,6 +12,17 @@ def get_page_spec(mode: str):
         w, h = A4
         margin = 18 * mm
         return {"pagesize": (w, h), "margin": margin, "bleed": 0.0}
+
+    if mode == "KDP Buch":
+        # KDP Square: 8.5" x 8.5" + 0.125" bleed auf allen Seiten
+        bleed = 0.125 * inch
+        w = 8.5 * inch + 2 * bleed
+        h = 8.5 * inch + 2 * bleed
+        # Safe-Zone: 0.375" innerhalb vom Trim; also ab Trim+0.375"
+        # Margin ab äußerer Seite (inkl. Bleed) gerechnet:
+        margin = bleed + 0.375 * inch
+        return {"pagesize": (w, h), "margin": margin, "bleed": bleed}
+
     raise ValueError(f"Unknown mode: {mode}")
 
 def draw_box(c: canvas.Canvas, x, y, w, h, *, stroke=1, fill=0, line_width=1):
@@ -44,10 +55,8 @@ def draw_writing_area(
     if lines:
         c.setLineWidth(0.6)
         c.setStrokeColor(colors.Color(0, 0, 0, alpha=0.25))  # leicht
-        # Linien von oben nach unten
         y_top = y + h - top_padding
         cur = y_top
-        # Stop ein wenig über dem unteren Rand
         y_min = y + 10
         while cur > y_min:
             c.line(x + left_padding, cur, x + w - left_padding, cur)
@@ -68,19 +77,14 @@ def draw_brand_mark(
     'mode=watermark' setzt sie groß, dezent im Hintergrund.
     """
     c.saveState()
-
-    # Transparenz (falls nicht verfügbar, fällt ReportLab einfach zurück)
     try:
         c.setFillAlpha(opacity)
         c.setStrokeAlpha(opacity)
     except Exception:
         pass
 
-    # Eddie-Lila (dezent) – du kannst den Ton später systemweit in config ziehen
     tongue = colors.Color(0.45, 0.20, 0.65, alpha=opacity)
 
-    # Position/Größe Wasserzeichen
-    # Wir zeichnen in einem eigenen Koordinatensystem (translate+scale)
     cx = page_w * 0.72
     cy = page_h * 0.18
     base = min(page_w, page_h) * 0.45 * scale
@@ -90,8 +94,6 @@ def draw_brand_mark(
     c.setStrokeColor(tongue)
     c.setLineWidth(2)
 
-    # Zungenform (vereinfachter Vektor: Tropfen + Kerbe)
-    # Außenform:
     p = c.beginPath()
     p.moveTo(0, 0)
     p.curveTo(base*0.55, base*0.10, base*0.75, base*0.55, base*0.30, base*0.85)
@@ -100,7 +102,6 @@ def draw_brand_mark(
     p.close()
     c.drawPath(p, stroke=0, fill=1)
 
-    # Kerbe (kleine Einziehung oben mittig)
     try:
         c.setFillAlpha(min(0.18, opacity*2))
     except Exception:
