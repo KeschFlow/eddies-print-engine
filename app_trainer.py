@@ -1,4 +1,30 @@
-# app_trainer.py  — Eddie Trainer V2 (Platinum)
+## app_trainer.py (Snippet)
+import streamlit as st
+from kern.export_orchestrator import run_export
+
+with st.sidebar:
+    st.header("⚙️ Export-Konfiguration")
+    export_mode = st.selectbox(
+        "Format wählen",
+        ["KDP Buch", "A4 Arbeitsblatt", "QR Lernkarten"],
+        help="Wähle das Format passend zu deiner Zielgruppe."
+    )
+
+data = {
+    "items": [
+        {
+            "term": "der Hammer",
+            "icon_slug": "hammer",
+            "examples": ["Ich nehme den Hammer.", "Der Hammer ist schwer.", "Wo ist der Hammer?"],
+            "note_prompt": "Schreibe 3 eigene Sätze:"
+        }
+    ]
+}
+
+if st.button("Export erstellen"):
+    pdf_bytes = run_export(export_mode, data, title="Eddie – Arbeitsblatt", subtitle="DaZ / Berufssprache", watermark=True, lines=True)
+    st.download_button("PDF herunterladen", pdf_bytes, file_name="eddie_a4_arbeitsblatt.pdf")
+ app_trainer.py  — Eddie Trainer V2 (Platinum)
 # Features:
 # - Fach auswählen (SUBJECTS) ODER eigene Vokabeln tippen
 # - Optional: Bilder hochladen (zyklisch verteilt)
