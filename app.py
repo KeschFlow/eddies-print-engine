@@ -1,6 +1,5 @@
-```python
 # =========================================================
-# app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT (Hardened)
+# app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT
 # =========================================================
 from __future__ import annotations
 
@@ -198,9 +197,7 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
         sc = compute(ts, bs, ls)
 
     if sc["needed"] > max_card_h:
-        rem = max_card_h - (
-            base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + gap_sections + base_bottom
-        )
+        rem = max_card_h - (base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + gap_sections + base_bottom)
         max_b = max(2, int(rem // sc["bl"]))
 
         move_allow = max(1, max_b // 2)
@@ -252,7 +249,7 @@ def _page_geometry(kdp: bool) -> Tuple[float, float, float, float]:
 def _draw_kdp_debug_guides(c: canvas.Canvas, pw: float, ph: float, bleed: float, safe: float):
     c.saveState()
     c.setLineWidth(DEBUG_LINE_W)
-    c.setDash(3, 3)  # gestrichelt
+    c.setDash(3, 3)
 
     if bleed > 0:
         c.setStrokeColor(DEBUG_BLEED_COLOR)
@@ -290,7 +287,6 @@ def _draw_quest_overlay(
 
     c.saveState()
 
-    # Header
     c.setFillColor(fill)
     c.setStrokeColor(INK_BLACK)
     c.setLineWidth(1)
@@ -298,16 +294,11 @@ def _draw_quest_overlay(
 
     c.setFillColor(tc)
     _set_font(c, True, 14)
-    c.drawString(
-        x0 + 0.18 * inch,
-        y0 + header_h - 0.50 * inch,
-        f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}",
-    )
+    c.drawString(x0 + 0.18 * inch, y0 + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
 
     _set_font(c, False, 10)
     c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
 
-    # Card
     cy = safe
     max_ch = (y0 - safe) - (0.15 * inch)
     pad_x = 0.18 * inch
@@ -432,7 +423,7 @@ def build_interior(
         c.showPage()
 
     for i, up in enumerate(final):
-        data = up.getvalue()  # RAM-copy (Uploader-safe)
+        data = up.getvalue()  # RAM-copy: streamlit uploader safe
         sk = _cv_sketch_from_bytes(data)
         pil = Image.fromarray(sk).convert("L")
 
@@ -449,7 +440,7 @@ def build_interior(
         c.drawImage(ImageReader(ib), 0, 0, pw, ph)
 
         h_val = (start_hour + i) % 24
-        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF  # 32-bit safe
+        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF  # 32-bit guard
         mission = qd.pick_mission_for_time(h_val, diff, seed)
 
         _draw_quest_overlay(c, pw, ph, bleed, safe, h_val, mission, debug=debug_guides)
@@ -480,8 +471,8 @@ def build_interior(
 
 def build_cover(name: str, pages: int, paper: str) -> bytes:
     sw = float(pages) * PAPER_FACTORS.get(paper, 0.002252) * inch
-    sw = max(sw, 0.001 * inch)  # float-edge guard
-    sw = round(sw / (0.001 * inch)) * (0.001 * inch)  # subpixel rounding prevention
+    sw = max(sw, 0.001 * inch)
+    sw = round(sw / (0.001 * inch)) * (0.001 * inch)  # Subpixel-Rounding Prävention
 
     cw, ch = (2 * TRIM) + sw + (2 * BLEED), TRIM + (2 * BLEED)
 
@@ -491,11 +482,9 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
     c.setFillColor(colors.white)
     c.rect(0, 0, cw, ch, fill=1, stroke=0)
 
-    # Spine
     c.setFillColor(INK_BLACK)
     c.rect(BLEED + TRIM, BLEED, sw, TRIM, fill=1, stroke=0)
 
-    # Spine text
     if pages >= SPINE_TEXT_MIN_PAGES:
         c.saveState()
         c.setFillColor(colors.white)
@@ -505,7 +494,6 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
         c.drawCentredString(0, -4, f"EDDIES & {name}".upper())
         c.restoreState()
 
-    # Front cover
     fx = BLEED + TRIM + sw
     _draw_eddie(c, fx + TRIM / 2, BLEED + TRIM * 0.58, TRIM * 0.18)
 
@@ -593,6 +581,7 @@ with st.container(border=True):
             step=2,
             key="pages",
         )
+
         paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()), key="paper")
 
     kdp = st.toggle("KDP-Mode (Bleed)", True)
@@ -686,4 +675,3 @@ if st.session_state.assets:
             st.download_button("📝 Listing (SEO)", f, file_name=f"Listing_{a['name']}.txt")
 
 st.markdown("<div style='text-align:center; color:grey;'>Eddies Welt © 2026</div>", unsafe_allow_html=True)
-```
