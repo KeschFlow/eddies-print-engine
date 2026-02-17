@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import io
 import os
-import random
 import tempfile
+import hashlib
 from typing import Dict, Any, List, Optional, Tuple
 
 import streamlit as st
@@ -211,6 +211,10 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
     return sc
 
 
+def _stable_seed(s: str) -> int:
+    return int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:8], "big")
+
+
 # =========================================================
 # 3) SKETCH ENGINE & GEOMETRY
 # =========================================================
@@ -367,6 +371,8 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(pw, ph))
+    
+    seed_base = _stable_seed(name)
 
     if intro:
         c.setFillColor(colors.white)
@@ -389,8 +395,8 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
         c.showPage()
 
     for i, up in enumerate(final):
-        up.seek(0)
-        sk = _cv_sketch_from_bytes(up.read())
+        data = up.getvalue()
+        sk = _cv_sketch_from_bytes(data)
         pil = Image.fromarray(sk).convert("L")
 
         sw, sh = pil.size
@@ -406,7 +412,8 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
         c.drawImage(ImageReader(ib), 0, 0, pw, ph)
 
         h_val = (start_hour + i) % 24
-        mission = qd.pick_mission_for_time(h_val, diff, int(hash(name) ^ (i << 1) ^ h_val))
+        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF
+        mission = qd.pick_mission_for_time(h_val, diff, seed)
         
         _draw_quest_overlay(c, pw, ph, bleed, safe, h_val, mission, debug=debug_guides)
 
@@ -471,6 +478,7 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
+
 def build_listing_text(child_name: str) -> str:
     cn = (child_name or "").strip()
     title = "Eddies" if cn.lower() in {"eddie", "eddies"} else f"Eddies & {cn}"
@@ -534,15 +542,16 @@ with st.container(border=True):
         age = st.number_input("Alter", 3, 99, 5)
     with col2:
         st.session_state.setdefault("pages", KDP_MIN_PAGES)
-        pages = st.number_input("Seiten", KDP_MIN_PAGES, 300, int(st.session_state.pages), key="pages")
-
-        # KDP/Print: Seitenzahl immer gerade halten (state-safe)
-        if int(pages) % 2 != 0:
-            st.info("ℹ️ Seitenzahl wurde auf die nächste gerade Zahl angehoben (Print-Safety).")
-            st.session_state.pages = int(pages) + 1
-            pages = st.session_state.pages
+        pages = st.number_input(
+            "Seiten", 
+            min_value=KDP_MIN_PAGES, 
+            max_value=300, 
+            value=int(st.session_state.pages), 
+            step=2, 
+            key="pages"
+        )
             
-        paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()))
+        paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()), key="paper")
 
     kdp = st.toggle("KDP-Mode (Bleed)", True)
     debug_guides = st.toggle("🧪 KDP Preflight Debug (Bleed/Safe)", False)
@@ -557,16 +566,14 @@ if uploads and name:
 
     small_files = []
     for up in uploads:
-        up.seek(0)
+        data = up.getvalue()
         try:
-            with Image.open(up) as img:
+            with Image.open(io.BytesIO(data)) as img:
                 w, h = img.size
                 if min(w, h) < target_px:
                     small_files.append((up.name, w, h))
         except Exception:
             pass  # Ignorieren, Fehler fliegen später beim Sketching
-        finally:
-            up.seek(0)
 
     if small_files:
         st.warning(f"⚠️ {len(small_files)} Foto(s) sind kleiner als die empfohlene Zielauflösung ({target_px}px). Das kann zu unscharfem Druck führen.")
