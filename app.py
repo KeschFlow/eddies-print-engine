@@ -1,5 +1,5 @@
 # =========================
-# app.py  (Questbook Edition) — PRO / Stabil / KDP-Ready
+# app.py  (Questbook Edition) — PRO / Stabil / KDP-Ready (Hardened)
 # =========================
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ import io
 import random
 import re
 import zipfile
+import tempfile
+import os
 from datetime import datetime
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List, Optional
 
 import streamlit as st
 import cv2
@@ -19,8 +21,18 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
-import quest_data as qd  # <-- QUEST SYSTEM
+# =========================================================
+# QUEST SYSTEM (guarded import)
+# =========================================================
+try:
+    import quest_data as qd  # <-- QUEST SYSTEM
+except Exception as e:
+    qd = None
+    _QD_IMPORT_ERROR = str(e)
+else:
+    _QD_IMPORT_ERROR = ""
 
 
 # =========================================================
@@ -72,6 +84,10 @@ small { color: #6b7280; }
 
 st.markdown(f"<div class='main-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>24h Quest-Malbuch: Foto-Skizzen + Missionen + XP</div>", unsafe_allow_html=True)
+
+if qd is None:
+    st.error(f"Quest-System fehlt/fehlerhaft: {_QD_IMPORT_ERROR}")
+    st.stop()
 
 # Quest DB sanity (nur anzeigen – nicht crashen)
 issues = qd.validate_quest_db()
@@ -191,16 +207,21 @@ def build_front_cover_preview_png(child_name: str, size_px: int = 900) -> bytes:
     return buf.getvalue()
 
 
+# --- FIX 1: Bulletproof Sketching (Division-by-Zero Protection) ---
 def _cv_sketch_from_bytes(img_bytes: bytes) -> np.ndarray:
-    """Bytes -> sketch array (grayscale)."""
+    """Bytes -> sketch array (grayscale), robust gegen /0."""
     arr = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
     if arr is None:
         raise RuntimeError("Bild konnte nicht dekodiert werden.")
     gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
     inverted = 255 - gray
     blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
-    sketch = cv2.divide(gray, 255 - blurred, scale=256.0)
-    return cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
+
+    denom = 255 - blurred
+    denom = np.clip(denom, 1, 255)  # <- verhindert Division durch 0
+
+    sketch = cv2.divide(gray, denom, scale=256.0)
+    return cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
 
 def _center_crop_resize_square(pil_img: Image.Image, side_px: int) -> Image.Image:
@@ -244,7 +265,13 @@ def _calc_spine_width_inch(page_count: int, paper_type: str) -> float:
 
 
 def build_listing_text(child_name: str) -> str:
-    title = f"Eddies & {child_name}"
+    # Title: avoid "Eddies & Eddie" if same name
+    cn = (child_name or "").strip()
+    if cn.lower() == "eddie":
+        title = "Eddies"
+    else:
+        title = f"Eddies & {cn}"
+
     subtitle = (
         "24h Quest-Malbuch aus echten Momenten – "
         "Bewegung + Denken + Ausmalen (Personalisiertes Geschenk)"
@@ -292,6 +319,32 @@ def _text_color_for_rgb(rgb01) -> colors.Color:
     return colors.white if lum < 0.45 else colors.black
 
 
+# --- FIX 2: Text Wrapping for Mission Cards ---
+def _wrap_text(text: str, font: str, size: int, max_w: float) -> List[str]:
+    words = (text or "").split()
+    lines: List[str] = []
+    cur = ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if stringWidth(trial, font, size) <= max_w:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+# --- FIX 3: Safe Image Rendering into PDF (PNG buffer) ---
+def _safe_draw_image(c: canvas.Canvas, pil_img: Image.Image, x: float, y: float, width: float, height: float):
+    png_buf = io.BytesIO()
+    pil_img.save(png_buf, format="PNG", optimize=True)
+    png_buf.seek(0)
+    c.drawImage(ImageReader(png_buf), x, y, width=width, height=height, preserveAspectRatio=False, mask=None)
+
+
 def _draw_quest_overlay(
     c: canvas.Canvas,
     page_w: float,
@@ -300,7 +353,7 @@ def _draw_quest_overlay(
     hour: int,
     mission: qd.Mission,
 ):
-    """Header + Mission Card (unten) – alles innerhalb Safe-Zone."""
+    """Header + Mission Card (unten) – alles innerhalb Safe-Zone. Wrapped text."""
     header_h = 0.75 * inch
     x0 = safe
     y0 = page_h - safe - header_h
@@ -344,25 +397,48 @@ def _draw_quest_overlay(
     c.setFont("Helvetica-Bold", 11)
     c.drawRightString(x0 + w - 0.18 * inch, cy + card_h - 0.45 * inch, f"+{mission.xp} XP")
 
-    # Movement / Thinking
-    c.setFont("Helvetica-Bold", 10)
+    # Movement / Thinking (wrapped)
+    label_font = "Helvetica-Bold"
+    body_font = "Helvetica"
+    size = 10
+
+    # Bewegung
+    c.setFont(label_font, size)
     c.drawString(x0 + 0.18 * inch, cy + card_h - 0.85 * inch, "BEWEGUNG:")
-    c.setFont("Helvetica", 10)
-    c.drawString(x0 + 1.05 * inch, cy + card_h - 0.85 * inch, mission.movement)
+    c.setFont(body_font, size)
+    max_w_body = w - (1.05 * inch + 0.18 * inch + 0.18 * inch)
+    lines = _wrap_text(mission.movement, body_font, size, max_w_body)
+    y = cy + card_h - 0.85 * inch
+    for line in lines[:2]:
+        c.drawString(x0 + 1.05 * inch, y, line)
+        y -= 0.18 * inch
 
-    c.setFont("Helvetica-Bold", 10)
+    # Denken
+    c.setFont(label_font, size)
     c.drawString(x0 + 0.18 * inch, cy + card_h - 1.20 * inch, "DENKEN:")
-    c.setFont("Helvetica", 10)
-    c.drawString(x0 + 0.90 * inch, cy + card_h - 1.20 * inch, mission.thinking)
+    c.setFont(body_font, size)
+    lines = _wrap_text(mission.thinking, body_font, size, max_w_body)
+    y = cy + card_h - 1.20 * inch
+    for line in lines[:2]:
+        c.drawString(x0 + 0.90 * inch, y, line)
+        y -= 0.18 * inch
 
-    # Proof checkbox line
+    # Proof checkbox line (wrapped if long)
     box = 0.20 * inch
     bx = x0 + 0.18 * inch
     by = cy + 0.35 * inch
     c.setStrokeColor(colors.black)
     c.rect(bx, by, box, box, fill=0, stroke=1)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(bx + box + 0.15 * inch, by + 0.02 * inch, f"PROOF: {mission.proof}")
+
+    c.setFont(label_font, size)
+    prefix = "PROOF:"
+    c.drawString(bx + box + 0.15 * inch, by + 0.02 * inch, prefix)
+
+    c.setFont(body_font, size)
+    proof_x = bx + box + 0.15 * inch + stringWidth(prefix + " ", label_font, size) + 2
+    max_w_proof = (x0 + w - 0.18 * inch) - proof_x
+    proof_lines = _wrap_text(mission.proof, body_font, size, max_w_proof)
+    c.drawString(proof_x, by + 0.02 * inch, proof_lines[0] if proof_lines else "")
 
     c.restoreState()
 
@@ -524,7 +600,10 @@ def build_interior_pdf(
             sketch_arr = _cv_sketch_from_bytes(img_bytes)
             pil = Image.fromarray(sketch_arr).convert("L")
             pil = _center_crop_resize_square(pil, side_px)
-            c.drawImage(ImageReader(pil), 0, 0, width=page_w, height=page_h)
+
+            # draw stable via PNG buffer
+            _safe_draw_image(c, pil, 0, 0, page_w, page_h)
+
         except Exception:
             c.setFillColor(colors.white)
             c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
@@ -636,10 +715,31 @@ def build_cover_wrap_pdf(child_name: str, page_count: int, paper_type: str) -> b
 
 
 # =========================================================
-# 7) SESSION STATE
+# 7) SESSION STATE (RAM hardening via tempfiles)
 # =========================================================
-if "assets" not in st.session_state:
-    st.session_state.assets = None
+if "asset_paths" not in st.session_state:
+    st.session_state.asset_paths = None
+
+def _write_temp_bytes(prefix: str, suffix: str, data: bytes) -> str:
+    tf = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False)
+    tf.write(data)
+    tf.flush()
+    tf.close()
+    return tf.name
+
+def _read_file_bytes(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
+
+def _cleanup_old_assets(paths: Optional[Dict[str, str]]):
+    if not paths:
+        return
+    for k, p in paths.items():
+        try:
+            if p and os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
 
 
 # =========================================================
@@ -752,23 +852,29 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
                 z.writestr(f"CoverWrap_{base}_{today}.pdf", cover_pdf)
                 z.writestr(f"Listing_{base}_{today}.txt", listing_txt)
 
-            zip_buf.seek(0)
+            zip_bytes = zip_buf.getvalue()
 
-            st.session_state.assets = {
-                "zip": zip_buf.getvalue(),
-                "interior": interior_pdf,
-                "cover": cover_pdf,
-                "preview": preview_png,
-                "listing": listing_txt,
-                "ok": ok_ct,
-                "warn": warn_ct,
-                "target_px": target_px,
+            # RAM hardening: cleanup old, then write new tempfiles
+            _cleanup_old_assets(st.session_state.asset_paths)
+
+            paths = {
+                "zip": _write_temp_bytes("eddies_", ".zip", zip_bytes),
+                "interior": _write_temp_bytes("eddies_", ".pdf", interior_pdf),
+                "cover": _write_temp_bytes("eddies_", ".pdf", cover_pdf),
+                "preview": _write_temp_bytes("eddies_", ".png", preview_png),
+                "listing": _write_temp_bytes("eddies_", ".txt", listing_txt.encode("utf-8")),
+            }
+            st.session_state.asset_paths = {
+                **paths,
+                "ok": str(ok_ct),
+                "warn": str(warn_ct),
+                "target_px": str(target_px),
                 "name": child_name.strip(),
                 "date": today,
-                "kdp_mode": bool(kdp_print_mode),
-                "pages_kdp": int(page_count_kdp),
-                "age": int(child_age),
-                "difficulty": int(quest_difficulty),
+                "kdp_mode": str(bool(kdp_print_mode)),
+                "pages_kdp": str(int(page_count_kdp)),
+                "age": str(int(child_age)),
+                "difficulty": str(int(quest_difficulty)),
             }
 
             progress.progress(100, text="Fertig ✅")
@@ -777,27 +883,34 @@ if st.button("🚀 Questbuch generieren", disabled=not can_build):
 
 
 # =========================================================
-# 10) OUTPUT
+# 10) OUTPUT (read from tempfiles)
 # =========================================================
-if st.session_state.assets:
-    a: Dict[str, Any] = st.session_state.assets
+if st.session_state.asset_paths:
+    p: Dict[str, Any] = st.session_state.asset_paths
 
     with st.container(border=True):
         st.markdown("### 👀 Vorschau & Qualitätscheck")
 
+        preview_bytes = _read_file_bytes(p["preview"])
+        interior_bytes = _read_file_bytes(p["interior"])
+        cover_bytes = _read_file_bytes(p["cover"])
+        zip_bytes = _read_file_bytes(p["zip"])
+        listing_bytes = _read_file_bytes(p["listing"])
+        listing_str = listing_bytes.decode("utf-8", errors="ignore")
+
         c1, c2 = st.columns([1, 1], gap="large")
         with c1:
-            st.image(a["preview"], caption="Front-Cover Vorschau", use_container_width=True)
+            st.image(preview_bytes, caption="Front-Cover Vorschau", use_container_width=True)
 
         with c2:
             st.markdown("**Preflight:**")
-            st.write(f"KDP-Seiten (forced): **{a['pages_kdp']}**")
-            st.write(f"Alter: **{a['age']}**  |  Quest-Stufe (auto): **{a['difficulty']}**")
-            st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {a['target_px']}px** (@ {DPI} DPI)")
-            st.success(f"✅ {a['ok']} Foto(s) erfüllen das Ziel")
+            st.write(f"KDP-Seiten (forced): **{p['pages_kdp']}**")
+            st.write(f"Alter: **{p['age']}**  |  Quest-Stufe (auto): **{p['difficulty']}**")
+            st.write(f"Ziel-Auflösung (kürzere Seite): **≥ {p['target_px']}px** (@ {DPI} DPI)")
+            st.success(f"✅ {p['ok']} Foto(s) erfüllen das Ziel")
 
-            if a["warn"] > 0:
-                if a.get("kdp_mode", False):
+            if int(p["warn"]) > 0:
+                if p.get("kdp_mode", "False") == "True":
                     st.warning("⚠️ Einige Fotos sind wahrscheinlich zu klein – KDP-Export wird trotzdem erzeugt, kann aber weicher wirken.")
                 else:
                     st.warning("⚠️ Einige Fotos sind wahrscheinlich zu klein – im Preview wird eine QA-Seite eingefügt (nur Preview).")
@@ -807,8 +920,8 @@ if st.session_state.assets:
 
         st.download_button(
             "📦 Download: Komplettpaket (ZIP)",
-            data=a["zip"],
-            file_name=f"Eddies_Quest_Set_{_sanitize_filename(a['name'])}_{a['date']}.zip",
+            data=zip_bytes,
+            file_name=f"Eddies_Quest_Set_{_sanitize_filename(p['name'])}_{p['date']}.zip",
             mime="application/zip",
         )
 
@@ -816,20 +929,20 @@ if st.session_state.assets:
         with d1:
             st.download_button(
                 "📘 Interior PDF",
-                data=a["interior"],
-                file_name=f"Interior_{_sanitize_filename(a['name'])}_{a['date']}.pdf",
+                data=interior_bytes,
+                file_name=f"Interior_{_sanitize_filename(p['name'])}_{p['date']}.pdf",
                 mime="application/pdf",
             )
         with d2:
             st.download_button(
                 "🎨 CoverWrap PDF",
-                data=a["cover"],
-                file_name=f"CoverWrap_{_sanitize_filename(a['name'])}_{a['date']}.pdf",
+                data=cover_bytes,
+                file_name=f"CoverWrap_{_sanitize_filename(p['name'])}_{p['date']}.pdf",
                 mime="application/pdf",
             )
 
     with st.expander("📦 Listing.txt (Copy & Paste)", expanded=True):
-        st.code(a["listing"], language="text")
+        st.code(listing_str, language="text")
 
 st.markdown(
     f"<div style='text-align:center; margin-top:32px; color:#6b7280; font-size:0.85rem;'>"
