@@ -1,5 +1,6 @@
+```python
 # =========================================================
-# app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT
+# app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT (Hardened)
 # =========================================================
 from __future__ import annotations
 
@@ -172,12 +173,21 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
             + gap_sections
             + base_bottom
         )
-        return {"ts": ts, "bs": bs, "ls": ls, "tl": tl, "bl": bl, "ll": ll, "ml": ml, "tl_lines": tl_lines, "needed": needed}
+        return {
+            "ts": ts,
+            "bs": bs,
+            "ls": ls,
+            "tl": tl,
+            "bl": bl,
+            "ll": ll,
+            "ml": ml,
+            "tl_lines": tl_lines,
+            "needed": needed,
+        }
 
     ts, bs, ls = 13, 10, 10
     sc = compute(ts, bs, ls)
 
-    # shrink stepwise
     while sc["needed"] > max_card_h and (ts > 11 or bs > 8 or ls > 8):
         if ts > 11:
             ts -= 1
@@ -187,9 +197,10 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
             ls -= 1
         sc = compute(ts, bs, ls)
 
-    # if still too tall: truncate lines
     if sc["needed"] > max_card_h:
-        rem = max_card_h - (base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + gap_sections + base_bottom)
+        rem = max_card_h - (
+            base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + gap_sections + base_bottom
+        )
         max_b = max(2, int(rem // sc["bl"]))
 
         move_allow = max(1, max_b // 2)
@@ -250,14 +261,23 @@ def _draw_kdp_debug_guides(c: canvas.Canvas, pw: float, ph: float, bleed: float,
     c.setStrokeColor(DEBUG_SAFE_COLOR)
     c.rect(safe, safe, pw - 2 * safe, ph - 2 * safe, stroke=1, fill=0)
 
-    c.setDash()  # reset
+    c.setDash()
     c.restoreState()
 
 
 # =========================================================
 # 4) DYNAMIC QUEST OVERLAY (AUTO-SCALE)
 # =========================================================
-def _draw_quest_overlay(c: canvas.Canvas, pw: float, ph: float, bleed: float, safe: float, hour: int, mission, debug: bool):
+def _draw_quest_overlay(
+    c: canvas.Canvas,
+    pw: float,
+    ph: float,
+    bleed: float,
+    safe: float,
+    hour: int,
+    mission,
+    debug: bool,
+):
     header_h = 0.75 * inch
     x0, y0, w = safe, ph - safe - header_h, pw - 2 * safe
 
@@ -270,6 +290,7 @@ def _draw_quest_overlay(c: canvas.Canvas, pw: float, ph: float, bleed: float, sa
 
     c.saveState()
 
+    # Header
     c.setFillColor(fill)
     c.setStrokeColor(INK_BLACK)
     c.setLineWidth(1)
@@ -277,11 +298,16 @@ def _draw_quest_overlay(c: canvas.Canvas, pw: float, ph: float, bleed: float, sa
 
     c.setFillColor(tc)
     _set_font(c, True, 14)
-    c.drawString(x0 + 0.18 * inch, y0 + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
+    c.drawString(
+        x0 + 0.18 * inch,
+        y0 + header_h - 0.50 * inch,
+        f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}",
+    )
 
     _set_font(c, False, 10)
     c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
 
+    # Card
     cy = safe
     max_ch = (y0 - safe) - (0.15 * inch)
     pad_x = 0.18 * inch
@@ -359,7 +385,18 @@ def _draw_eddie(c: canvas.Canvas, cx: float, cy: float, r: float):
     c.restoreState()
 
 
-def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, intro: bool, outro: bool, start_hour: int, diff: int, debug_guides: bool) -> bytes:
+def build_interior(
+    name: str,
+    uploads,
+    pages: int,
+    eddie_mark: bool,
+    kdp: bool,
+    intro: bool,
+    outro: bool,
+    start_hour: int,
+    diff: int,
+    debug_guides: bool,
+) -> bytes:
     pw, ph, bleed, safe = _page_geometry(kdp)
 
     files = list(uploads or [])
@@ -371,7 +408,7 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(pw, ph))
-    
+
     seed_base = _stable_seed(name)
 
     if intro:
@@ -395,7 +432,7 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
         c.showPage()
 
     for i, up in enumerate(final):
-        data = up.getvalue()
+        data = up.getvalue()  # RAM-copy (Uploader-safe)
         sk = _cv_sketch_from_bytes(data)
         pil = Image.fromarray(sk).convert("L")
 
@@ -412,9 +449,9 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
         c.drawImage(ImageReader(ib), 0, 0, pw, ph)
 
         h_val = (start_hour + i) % 24
-        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF
+        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF  # 32-bit safe
         mission = qd.pick_mission_for_time(h_val, diff, seed)
-        
+
         _draw_quest_overlay(c, pw, ph, bleed, safe, h_val, mission, debug=debug_guides)
 
         if eddie_mark:
@@ -430,10 +467,10 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
         c.setFillColor(INK_BLACK)
         _set_font(c, True, 30)
         c.drawCentredString(pw / 2, safe + 1.75 * inch, "Quest abgeschlossen!")
-        
+
         if debug_guides:
             _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
-            
+
         c.showPage()
 
     c.save()
@@ -443,8 +480,9 @@ def build_interior(name: str, uploads, pages: int, eddie_mark: bool, kdp: bool, 
 
 def build_cover(name: str, pages: int, paper: str) -> bytes:
     sw = float(pages) * PAPER_FACTORS.get(paper, 0.002252) * inch
-    sw = max(sw, 0.001 * inch)
-    sw = round(sw / (0.001 * inch)) * (0.001 * inch)  # Subpixel-Rounding Prävention
+    sw = max(sw, 0.001 * inch)  # float-edge guard
+    sw = round(sw / (0.001 * inch)) * (0.001 * inch)  # subpixel rounding prevention
+
     cw, ch = (2 * TRIM) + sw + (2 * BLEED), TRIM + (2 * BLEED)
 
     buf = io.BytesIO()
@@ -453,9 +491,11 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
     c.setFillColor(colors.white)
     c.rect(0, 0, cw, ch, fill=1, stroke=0)
 
+    # Spine
     c.setFillColor(INK_BLACK)
     c.rect(BLEED + TRIM, BLEED, sw, TRIM, fill=1, stroke=0)
 
+    # Spine text
     if pages >= SPINE_TEXT_MIN_PAGES:
         c.saveState()
         c.setFillColor(colors.white)
@@ -465,6 +505,7 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
         c.drawCentredString(0, -4, f"EDDIES & {name}".upper())
         c.restoreState()
 
+    # Front cover
     fx = BLEED + TRIM + sw
     _draw_eddie(c, fx + TRIM / 2, BLEED + TRIM * 0.58, TRIM * 0.18)
 
@@ -489,9 +530,9 @@ def build_listing_text(child_name: str) -> str:
         "kinder malbuch ab 4 jahre",
         "abenteuer buch kinder",
         "24 missionen kinder",
-        "ausmalbilder aus fotos"
+        "ausmalbilder aus fotos",
     ]
-    html = f"""<h3>24 Stunden. 24 Missionen. Dein Kind als Held.</h3>
+    html = """<h3>24 Stunden. 24 Missionen. Dein Kind als Held.</h3>
 <p>Aus deinen Fotos entstehen Ausmalbilder – und jede Seite enthält eine Mini-Quest:
 <b>Bewegung</b> + <b>Denkaufgabe</b> + <b>XP</b> zum Abhaken.</p>
 <ul>
@@ -501,16 +542,18 @@ def build_listing_text(child_name: str) -> str:
 </ul>
 <p><i>Eddies bleibt schwarz-weiß als Guide – dein Kind macht die Welt bunt.</i></p>
 """
-    return "\n".join([
-        "READY-TO-PUBLISH LISTING BUNDLE",
-        f"TITEL: {title}",
-        "",
-        "KEYWORDS (7 Felder):",
-        "\n".join([f"{i+1}. {k}" for i, k in enumerate(keywords)]),
-        "",
-        "BESCHREIBUNG (HTML):",
-        html
-    ])
+    return "\n".join(
+        [
+            "READY-TO-PUBLISH LISTING BUNDLE",
+            f"TITEL: {title}",
+            "",
+            "KEYWORDS (7 Felder):",
+            "\n".join([f"{i+1}. {k}" for i, k in enumerate(keywords)]),
+            "",
+            "BESCHREIBUNG (HTML):",
+            html,
+        ]
+    )
 
 
 # =========================================================
@@ -543,14 +586,13 @@ with st.container(border=True):
     with col2:
         st.session_state.setdefault("pages", KDP_MIN_PAGES)
         pages = st.number_input(
-            "Seiten", 
-            min_value=KDP_MIN_PAGES, 
-            max_value=300, 
-            value=int(st.session_state.pages), 
-            step=2, 
-            key="pages"
+            "Seiten",
+            min_value=KDP_MIN_PAGES,
+            max_value=300,
+            value=int(st.session_state.pages),
+            step=2,
+            key="pages",
         )
-            
         paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()), key="paper")
 
     kdp = st.toggle("KDP-Mode (Bleed)", True)
@@ -573,10 +615,13 @@ if uploads and name:
                 if min(w, h) < target_px:
                     small_files.append((up.name, w, h))
         except Exception:
-            pass  # Ignorieren, Fehler fliegen später beim Sketching
+            pass
 
     if small_files:
-        st.warning(f"⚠️ {len(small_files)} Foto(s) sind kleiner als die empfohlene Zielauflösung ({target_px}px). Das kann zu unscharfem Druck führen.")
+        st.warning(
+            f"⚠️ {len(small_files)} Foto(s) sind kleiner als die empfohlene Zielauflösung ({target_px}px). "
+            "Das kann zu unscharfem Druck führen."
+        )
         with st.expander("Details ansehen"):
             for sf, fw, fh in small_files:
                 st.write(f"- {sf} ({fw}x{fh} px)")
@@ -608,7 +653,7 @@ if st.button("🚀 Buch generieren", disabled=not can_build):
             pages=int(pages),
             paper=paper,
         )
-        
+
         listing_txt = build_listing_text(name)
 
         if st.session_state.assets:
@@ -641,3 +686,4 @@ if st.session_state.assets:
             st.download_button("📝 Listing (SEO)", f, file_name=f"Listing_{a['name']}.txt")
 
 st.markdown("<div style='text-align:center; color:grey;'>Eddies Welt © 2026</div>", unsafe_allow_html=True)
+```
