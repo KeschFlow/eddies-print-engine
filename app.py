@@ -2,6 +2,7 @@
 # app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT + GUIDE
 # - Eddie appears on EVERY mission page (safe-zone proof)
 # - XP Tracker + Story Progression + 24h Progress Bar
+# - CLEAN CODE: No Regex, Deterministic Precompute, KDP-safe
 # =========================================================
 from __future__ import annotations
 
@@ -74,6 +75,18 @@ GUIDE_R = 0.24 * inch
 # Progress bar (inside header)
 PROG_DOT_R = 0.045 * inch
 PROG_GAP = 0.075 * inch
+
+# --- STORY PROGRESSION SNIPPETS ---
+ZONE_STORY = {
+    "wachturm": "Startklar werden: Körper an, Kopf auf, Struktur rein.",
+    "wilder_pfad": "Draußen entdecken: Muster finden, Spuren lesen, neugierig bleiben.",
+    "taverne": "Energie tanken: bewusst essen, Körper wahrnehmen.",
+    "werkstatt": "Bauen & tüfteln: aus Ideen werden Dinge.",
+    "arena": "Action-Modus: Mut testen, Tempo fühlen, dranbleiben.",
+    "ratssaal": "Team-Moment: helfen, sprechen, Verbindung schaffen.",
+    "quellen": "Reset: sauber werden, runterfahren, bereit für Ruhe.",
+    "trauminsel": "Leise Phase: atmen, erinnern, Frieden sammeln.",
+}
 
 
 # =========================================================
@@ -295,11 +308,51 @@ def _draw_eddie(c: canvas.Canvas, cx: float, cy: float, r: float):
     c.restoreState()
 
 
-def _draw_eddie_guide_stamp(c: canvas.Canvas, pw: float, ph: float, safe: float):
-    """Eddie on every mission page (bottom-right, inside safe)."""
-    cx = pw - safe - GUIDE_MARGIN
-    cy = safe + GUIDE_MARGIN
-    _draw_eddie(c, cx, cy, GUIDE_R)
+def _draw_xp_bar(c: canvas.Canvas, x: float, y: float, w: float, h: float, progress: float, label: str):
+    """Minimal, KDP-safe XP progress bar."""
+    progress = max(0.0, min(1.0, float(progress)))
+    c.saveState()
+    
+    # outline
+    c.setStrokeColor(INK_BLACK)
+    c.setLineWidth(0.8)
+    c.rect(x, y, w, h, stroke=1, fill=0)
+    
+    # fill
+    if progress > 0:
+        c.setFillColor(INK_BLACK)
+        c.rect(x, y, w * progress, h, stroke=0, fill=1)
+        
+    # label (small, clean)
+    c.setFillColor(INK_BLACK)
+    _set_font(c, False, 8)
+    c.drawString(x, y + h + 0.06 * inch, label)
+    
+    c.restoreState()
+
+
+def _draw_eddie_guide_stamp(c: canvas.Canvas, pw: float, ph: float, safe: float, cum_xp: int, total_xp: int):
+    """Eddie + XP Bar on every mission page (bottom-right, inside safe)."""
+    # Eddie position
+    ed_x = pw - safe - GUIDE_MARGIN
+    ed_y = safe + GUIDE_MARGIN + 0.10 * inch # Leicht angehoben für den XP-Balken
+    _draw_eddie(c, ed_x, ed_y, GUIDE_R)
+
+    # XP bar under Eddie
+    bar_w = 1.35 * inch
+    bar_h = 0.10 * inch
+    bar_x = pw - safe - bar_w - 0.05 * inch
+    bar_y = safe + 0.12 * inch
+
+    _draw_xp_bar(
+        c,
+        bar_x,
+        bar_y,
+        bar_w,
+        bar_h,
+        progress=cum_xp / max(1, total_xp),
+        label=f"XP: {cum_xp}/{total_xp}",
+    )
 
 
 def _draw_progress_dots(
@@ -314,7 +367,6 @@ def _draw_progress_dots(
     Draw right-aligned starting at x_right.
     """
     c.saveState()
-    # we draw from right to left for easier right alignment
     for i in range(total - 1, -1, -1):
         x = x_right - (total - 1 - i) * (2 * PROG_DOT_R + PROG_GAP)
         filled = i <= current_idx
@@ -340,9 +392,9 @@ def _draw_quest_overlay(
     safe: float,
     hour: int,
     mission,
-    mission_idx: int,      # 0-based mission page index (excluding intro/outro)
-    mission_total: int,    # usually 24
-    xp_total: int,         # cumulative XP up to current mission
+    mission_idx: int,
+    mission_total: int,
+    xp_total: int,
     debug: bool,
 ):
     header_h = 0.75 * inch
@@ -368,17 +420,28 @@ def _draw_quest_overlay(
     _set_font(c, True, 14)
     c.drawString(x0 + 0.18 * inch, y0 + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
 
-    _set_font(c, False, 10)
-    c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
+    # --- STORY PROGRESSION BADGE ---
+    try:
+        chap_num = getattr(mission, 'chapter', 1)
+        tot_chap = getattr(mission, 'total_chapters', 1)
+        story_txt = ZONE_STORY.get(zone.id, zone.atmosphere)
+        badge_text = f"KAPITEL {chap_num}/{tot_chap} • {zone.name} — {story_txt}"
+    except Exception:
+        badge_text = f"{zone.name} — {zone.atmosphere}"
 
-    # Right header: Story progression + XP total
+    c.setFillColor(INK_GRAY_70)
+    _set_font(c, False, 8)
+    c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, badge_text)
+    c.setFillColor(tc)
+
+    # Right header: Progress
     _set_font(c, True, 10)
     right_pad = 0.18 * inch
     c.drawRightString(x0 + w - right_pad, y0 + header_h - 0.28 * inch, f"MISSION {mission_idx+1:02d}/{mission_total:02d}")
     _set_font(c, True, 10)
     c.drawRightString(x0 + w - right_pad, y0 + 0.22 * inch, f"TOTAL XP: {xp_total}")
 
-    # 24-dot progress bar under the right header line (still inside header)
+    # 24-dot progress bar
     dots_y = y0 + header_h - 0.55 * inch
     dots_right = x0 + w - right_pad
     _draw_progress_dots(c, dots_right, dots_y, current_idx=mission_idx, total=mission_total)
@@ -461,17 +524,39 @@ def build_interior(
     if not files:
         raise RuntimeError("Keine Bilder hochgeladen.")
 
-    # how many mission pages do we actually render from photos?
     photo_count = max(1, pages - (int(intro) + int(outro)))
     final = (files * (photo_count // len(files) + 1))[:photo_count]
-
-    # we treat mission_total as exactly the amount of photo pages in this run
     mission_total = len(final)
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(pw, ph))
 
     seed_base = _stable_seed(name)
+
+    # --- PRECOMPUTE HOURS, MISSIONS, ZONES, CHAPTERS ---
+    hours, missions, zones, chapter_idx = [], [], [], []
+    chap = 1
+    prev_zone_id = None
+    
+    for i in range(photo_count):
+        h_val = (start_hour + i) % 24
+        hours.append(h_val)
+        
+        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF
+        m = qd.pick_mission_for_time(h_val, diff, seed)
+        missions.append(m)
+        
+        z = qd.get_zone_for_hour(h_val)
+        zones.append(z)
+        
+        if prev_zone_id is not None and z.id != prev_zone_id:
+            chap += 1
+        chapter_idx.append(chap)
+        prev_zone_id = z.id
+
+    total_chapters = chapter_idx[-1] if chapter_idx else 1
+    total_xp = sum(int(getattr(m, "xp", 0) or 0) for m in missions) or 1
+    cum_xp = 0
 
     # Intro page
     if intro:
@@ -495,8 +580,34 @@ def build_interior(
         c.showPage()
 
     # Mission pages
-    xp_total = 0
     for i, up in enumerate(final):
+        h_val = hours[i]
+        mission = missions[i]
+        zone = zones[i]
+        
+        mission.chapter = chapter_idx[i]
+        mission.total_chapters = total_chapters
+        
+        # --- BOSS-FIGHT / KAPITEL-TRENNSEITE ---
+        if i > 0 and chapter_idx[i] > chapter_idx[i-1]:
+            c.saveState()
+            c.setFillColor(INK_BLACK)
+            c.rect(0, 0, pw, ph, fill=1, stroke=0)
+            
+            c.setFillColor(colors.white)
+            _set_font(c, True, 26)
+            c.drawCentredString(pw / 2.0, ph / 2.0 + 0.8 * inch, f"KAPITEL {mission.chapter}")
+            
+            _set_font(c, False, 14)
+            c.drawCentredString(pw / 2.0, ph / 2.0 - 0.4 * inch, f"Willkommen in: {zone.name}")
+            
+            if debug_guides:
+                _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
+                
+            c.restoreState()
+            c.showPage()
+
+        # Render User Image
         data = up.getvalue()
         sk = _cv_sketch_from_bytes(data)
         pil = Image.fromarray(sk).convert("L")
@@ -504,7 +615,6 @@ def build_interior(
         sw, sh = pil.size
         s = min(sw, sh)
 
-        # correct crop box (y2 must use sh, not sw)
         pil = pil.crop(((sw - s) // 2, (sh - s) // 2, (sw + s) // 2, (sh + s) // 2)).resize(
             (int(pw * DPI / inch), int(ph * DPI / inch)),
             Image.LANCZOS,
@@ -515,11 +625,7 @@ def build_interior(
         ib.seek(0)
         c.drawImage(ImageReader(ib), 0, 0, pw, ph)
 
-        h_val = (start_hour + i) % 24
-        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF
-        mission = qd.pick_mission_for_time(h_val, diff, seed)
-
-        xp_total += int(getattr(mission, "xp", 0) or 0)
+        cum_xp += int(getattr(mission, "xp", 0) or 0)
 
         _draw_quest_overlay(
             c=c,
@@ -531,16 +637,12 @@ def build_interior(
             mission=mission,
             mission_idx=i,
             mission_total=mission_total,
-            xp_total=xp_total,
+            xp_total=cum_xp,
             debug=bool(debug_guides),
         )
 
-        # Eddie as true GUIDE on every mission page (always on)
-        _draw_eddie_guide_stamp(c, pw, ph, safe)
-
-        # Optional extra watermark (if you still want it)
-        if eddie_mark:
-            _draw_eddie(c, pw - safe, safe + 2.25 * inch, 0.18 * inch)
+        # Eddie as true GUIDE + XP Tracker on every mission page
+        _draw_eddie_guide_stamp(c, pw, ph, safe, cum_xp, total_xp)
 
         c.showPage()
 
@@ -556,7 +658,7 @@ def build_interior(
 
         _set_font(c, False, 14)
         c.setFillColor(INK_GRAY_70)
-        c.drawCentredString(pw / 2, safe + 1.25 * inch, f"Dein Score: {xp_total} XP")
+        c.drawCentredString(pw / 2, safe + 1.25 * inch, f"Dein Score: {cum_xp} XP")
 
         if debug_guides:
             _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
@@ -673,12 +775,13 @@ with st.container(border=True):
         name = st.text_input("Name", value="Eddie")
         age = st.number_input("Alter", 3, 99, 5)
     with col2:
-        st.session_state.setdefault("pages", KDP_MIN_PAGES)
+        if "pages" not in st.session_state:
+            st.session_state.pages = KDP_MIN_PAGES
+            
         pages = st.number_input(
             "Seiten",
             min_value=KDP_MIN_PAGES,
             max_value=300,
-            value=int(st.session_state.pages),
             step=2,
             key="pages",
         )
