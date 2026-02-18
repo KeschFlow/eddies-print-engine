@@ -4,8 +4,10 @@ from __future__ import annotations
 from typing import Callable, List, Dict, Any
 from reportlab.pdfgen.canvas import Canvas
 
-# Jede Seite ist eine Funktion: (canvas, ctx) -> None, die genau 1 showPage() NICHT selbst aufruft
+# Jede Seite ist eine Funktion: (canvas, ctx) -> None
+# Die PageFn ruft NICHT selbst showPage() auf.
 PageFn = Callable[[Canvas, Dict[str, Any]], None]
+
 
 def ensure_min_pages(
     pages: List[PageFn],
@@ -16,7 +18,7 @@ def ensure_min_pages(
     """
     KDP Hardening:
     - garantiert Mindestseitenzahl (default 24)
-    - füllt mit hochwertigen Reflexionsseiten auf
+    - füllt mit Reflexionsseiten auf
     """
     out = list(pages or [])
     if min_pages <= 0:
@@ -26,7 +28,6 @@ def ensure_min_pages(
     if n >= min_pages:
         return out
 
-    # Fülle auf
     needed = min_pages - n
     start_idx = n + 1
     for k in range(needed):
