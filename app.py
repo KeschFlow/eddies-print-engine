@@ -1,14 +1,16 @@
 # =========================================================
-# app.py (Eddies Questbook Edition) — ULTIMATE + PREFLIGHT + GUIDE
-# - Eddie appears on EVERY mission page (safe-zone proof)
-# - XP Tracker + Story Progression + 24h Progress Bar
-# - CLEAN CODE: No Regex, Deterministic Precompute, KDP-safe
+# app.py (Eddies Questbook Edition 2026 — FINAL / KDP-HARDENED)
+# - Eddie as GUIDE: Black/White + Purple Tongue on every page
+# - KDP-READY: No page numbers, no author names, 300 DPI
+# - SKETCH: TRUE line-art (max white, clean outlines for coloring)
+# - HARD RULE: Interior pages >= 24 (enforced)
+# - METADATA: scrubbed (no author/creator/title defaults)
+# - UI: Image counter, preview slider, clean Streamlit
 # =========================================================
 from __future__ import annotations
 
 import io
 import os
-import tempfile
 import hashlib
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -25,10 +27,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
-
-# =========================================================
-# QUEST SYSTEM (guarded import)
-# =========================================================
+# --- QUEST SYSTEM IMPORT ---
 try:
     import quest_data as qd
 except Exception as e:
@@ -37,13 +36,12 @@ except Exception as e:
 else:
     _QD_IMPORT_ERROR = ""
 
-
 # =========================================================
-# 1) CONFIG & COLORS
+# 1) CONFIG & MARKEN-SPEZIFIKATIONEN
 # =========================================================
 APP_TITLE = "Eddies"
 APP_ICON = "🐶"
-EDDIE_PURPLE = "#7c3aed"
+EDDIE_PURPLE = "#7c3aed"  # verbindliche Zungenfarbe
 
 DPI = 300
 TRIM_IN = 8.5
@@ -52,50 +50,37 @@ BLEED = 0.125 * inch
 SAFE_INTERIOR = 0.375 * inch
 KDP_MIN_PAGES = 24
 
-# KDP-safe interior tones (strict)
 INK_BLACK = colors.Color(0, 0, 0)
 INK_GRAY_70 = colors.Color(0.30, 0.30, 0.30)
-
-# Debug Constants
-DEBUG_BLEED_COLOR = colors.red
-DEBUG_SAFE_COLOR = colors.green
-DEBUG_LINE_W = 0.4  # Extra fein für KDP-Radar
 
 PAPER_FACTORS = {
     "Schwarzweiß – Weiß": 0.002252,
     "Schwarzweiß – Creme": 0.0025,
     "Farbe – Weiß": 0.002347,
 }
-SPINE_TEXT_MIN_PAGES = 79
 
-# Guide placement (inside safe zone)
 GUIDE_MARGIN = 0.22 * inch
 GUIDE_R = 0.24 * inch
-
-# Progress bar (inside header)
 PROG_DOT_R = 0.045 * inch
 PROG_GAP = 0.075 * inch
 
-# --- STORY PROGRESSION SNIPPETS ---
 ZONE_STORY = {
     "wachturm": "Startklar werden: Körper an, Kopf auf, Struktur rein.",
-    "wilder_pfad": "Draußen entdecken: Muster finden, Spuren lesen, neugierig bleiben.",
+    "wilder_pfad": "Draußen entdecken: Muster finden, Spuren lesen.",
     "taverne": "Energie tanken: bewusst essen, Körper wahrnehmen.",
     "werkstatt": "Bauen & tüfteln: aus Ideen werden Dinge.",
-    "arena": "Action-Modus: Mut testen, Tempo fühlen, dranbleiben.",
-    "ratssaal": "Team-Moment: helfen, sprechen, Verbindung schaffen.",
-    "quellen": "Reset: sauber werden, runterfahren, bereit für Ruhe.",
-    "trauminsel": "Leise Phase: atmen, erinnern, Frieden sammeln.",
+    "arena": "Action-Modus: Mut testen, Tempo fühlen.",
+    "ratssaal": "Team-Moment: helfen, Verbindung schaffen.",
+    "quellen": "Reset: sauber werden, runterfahren.",
+    "trauminsel": "Leise Phase: atmen, Frieden sammeln.",
 }
 
-
 # =========================================================
-# 2) FONT & TEXT HELPERS (AUTO-SCALE READY)
+# 2) FONT & LAYOUT HELPERS
 # =========================================================
 def _try_register_fonts() -> Dict[str, str]:
     normal_p = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     bold_p = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-
     if os.path.exists(normal_p):
         try:
             pdfmetrics.registerFont(TTFont("EDDIES_FONT", normal_p))
@@ -106,7 +91,6 @@ def _try_register_fonts() -> Dict[str, str]:
             pdfmetrics.registerFont(TTFont("EDDIES_FONT_BOLD", bold_p))
         except Exception:
             pass
-
     f_n = "EDDIES_FONT" if "EDDIES_FONT" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
     f_b = "EDDIES_FONT_BOLD" if "EDDIES_FONT_BOLD" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
     return {"normal": f_n, "bold": f_b}
@@ -125,7 +109,6 @@ def _wrap_text_hard(text: str, font: str, size: int, max_w: float) -> List[str]:
     text = (text or "").strip()
     if not text:
         return [""]
-
     words = text.split()
     lines: List[str] = []
     cur = ""
@@ -142,479 +125,251 @@ def _wrap_text_hard(text: str, font: str, size: int, max_w: float) -> List[str]:
         else:
             if cur:
                 lines.append(cur)
-            if not fits(w):
-                chunk = ""
-                for ch in w:
-                    if fits(chunk + ch):
-                        chunk += ch
-                    else:
-                        if chunk:
-                            lines.append(chunk)
-                        chunk = ch
-                cur = chunk
-            else:
-                cur = w
-
+            cur = w
     if cur:
         lines.append(cur)
     return lines
 
 
-def _fit_lines(lines: List[str], max_lines: int) -> List[str]:
-    if len(lines) <= max_lines:
-        return lines
-    out = lines[:max_lines]
-    last = out[-1].rstrip()
-    out[-1] = (last[:-3].rstrip() if len(last) > 3 else last) + "…"
-    return out
-
-
-def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card_h: float) -> Dict[str, Any]:
-    base_top = 0.36 * inch
-    base_bottom = 0.40 * inch
-    gap_title = 0.10 * inch
-    gap_sections = 0.06 * inch
-
-    body_max_w_move = (x0 + w - pad_x) - (x0 + 1.05 * inch)
-    body_max_w_think = (x0 + w - pad_x) - (x0 + 0.90 * inch)
-
-    def compute(ts: int, bs: int, ls: int) -> Dict[str, Any]:
-        tl = ts * 1.22
-        bl = bs * 1.28
-        ll = ls * 1.22
-
-        ml = _wrap_text_hard(mission.movement, FONTS["normal"], bs, body_max_w_move)
-        tl_lines = _wrap_text_hard(mission.thinking, FONTS["normal"], bs, body_max_w_think)
-
-        needed = (
-            base_top
-            + tl
-            + gap_title
-            + (ll * 2)
-            + ((len(ml) + len(tl_lines)) * bl)
-            + gap_sections
-            + base_bottom
-        )
-        return {
-            "ts": ts,
-            "bs": bs,
-            "ls": ls,
-            "tl": tl,
-            "bl": bl,
-            "ll": ll,
-            "ml": ml,
-            "tl_lines": tl_lines,
-            "needed": needed,
-        }
-
-    ts, bs, ls = 13, 10, 10
-    sc = compute(ts, bs, ls)
-
-    while sc["needed"] > max_card_h and (ts > 11 or bs > 8 or ls > 8):
-        if ts > 11:
-            ts -= 1
-        if bs > 8:
-            bs -= 1
-        if ls > 8:
-            ls -= 1
-        sc = compute(ts, bs, ls)
-
-    if sc["needed"] > max_card_h:
-        rem = max_card_h - (base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + gap_sections + base_bottom)
-        max_b = max(2, int(rem // sc["bl"]))
-
-        move_allow = max(1, max_b // 2)
-        think_allow = max(1, max_b - move_allow)
-
-        sc["ml"] = _fit_lines(sc["ml"], move_allow)
-        sc["tl_lines"] = _fit_lines(sc["tl_lines"], think_allow)
-
-        sc["needed"] = (
-            base_top
-            + sc["tl"]
-            + gap_title
-            + (sc["ll"] * 2)
-            + ((len(sc["ml"]) + len(sc["tl_lines"])) * sc["bl"])
-            + gap_sections
-            + base_bottom
-        )
-
-    return sc
-
-
 def _stable_seed(s: str) -> int:
-    return int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:8], "big")
+    """Deterministischer 64-bit Seed (keine Drift)."""
+    h = hashlib.sha256((s or "").encode("utf-8")).digest()
+    return int.from_bytes(h[:8], "big", signed=False)
 
 
 # =========================================================
-# 3) SKETCH ENGINE & GEOMETRY
+# 3) SKETCH ENGINE (KDP-LINE-ART / MAX WHITE)
 # =========================================================
 def _cv_sketch_from_bytes(img_bytes: bytes) -> np.ndarray:
+    """
+    KDP-2026 Line-Art:
+    - Große weiße Flächen (Ausmalbarkeit)
+    - Saubere schwarze Konturen
+    - Minimale Graustufen
+    """
     arr = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
     if arr is None:
-        raise RuntimeError("Bild konnte nicht dekodiert werden.")
+        raise RuntimeError("Bild-Dekodierung fehlgeschlagen.")
+
     gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
-    inverted = 255 - gray
-    blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
-    denom = np.clip(255 - blurred, 1, 255)
-    sketch = cv2.divide(gray, denom, scale=256.0)
-    return cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    gray = cv2.bilateralFilter(gray, d=9, sigmaColor=80, sigmaSpace=80)
+
+    edges = cv2.Canny(gray, threshold1=40, threshold2=120)
+    edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+
+    line_art = 255 - edges
+    line_art = cv2.medianBlur(line_art, 3)
+    return line_art.astype(np.uint8)
 
 
 def _page_geometry(kdp: bool) -> Tuple[float, float, float, float]:
-    pw = (TRIM + 2 * BLEED) if kdp else TRIM
-    ph = (TRIM + 2 * BLEED) if kdp else TRIM
-    bleed = (BLEED if kdp else 0.0)
+    pw = ph = (TRIM + 2 * BLEED) if kdp else TRIM
+    bleed = BLEED if kdp else 0.0
     safe = bleed + SAFE_INTERIOR
     return float(pw), float(ph), float(bleed), float(safe)
 
 
-def _draw_kdp_debug_guides(c: canvas.Canvas, pw: float, ph: float, bleed: float, safe: float):
-    c.saveState()
-    c.setLineWidth(DEBUG_LINE_W)
-    c.setDash(3, 3)
-
-    if bleed > 0:
-        c.setStrokeColor(DEBUG_BLEED_COLOR)
-        c.rect(bleed, bleed, pw - 2 * bleed, ph - 2 * bleed, stroke=1, fill=0)
-
-    c.setStrokeColor(DEBUG_SAFE_COLOR)
-    c.rect(safe, safe, pw - 2 * safe, ph - 2 * safe, stroke=1, fill=0)
-
-    c.setDash()
-    c.restoreState()
+def _scrub_pdf_metadata(c: canvas.Canvas) -> None:
+    """Scrubbt PDF-Info-Felder (keine Autor/Creator Defaults)."""
+    try:
+        c.setAuthor("")
+        c.setTitle("")
+        c.setSubject("")
+        c.setCreator("")
+        c.setKeywords("")
+    except Exception:
+        pass
+    # ReportLab schreibt Producer intern; wir setzen, was erreichbar ist.
+    try:
+        if hasattr(c, "_doc") and hasattr(c._doc, "info") and c._doc.info:
+            c._doc.info.producer = ""
+            c._doc.info.author = ""
+            c._doc.info.title = ""
+            c._doc.info.subject = ""
+            c._doc.info.creator = ""
+            c._doc.info.keywords = ""
+    except Exception:
+        pass
 
 
 # =========================================================
-# 4) EDDIE (GUIDE) + TRACKERS
+# 4) EDDIE AS GUIDE (VISUALS)
 # =========================================================
 def _draw_eddie(c: canvas.Canvas, cx: float, cy: float, r: float):
-    """Minimal, print-safe Eddie icon (black/white + purple tongue)."""
+    """Eddie: Schwarz-weiß, Jack Russell, purpurfarbene Zunge."""
     c.saveState()
-    c.setLineWidth(max(2, r * 0.06))
+    c.setLineWidth(max(1.5, r * 0.06))
     c.setStrokeColor(INK_BLACK)
     c.setFillColor(colors.white)
+
+    # Kopf
     c.circle(cx, cy, r, stroke=1, fill=1)
 
+    # Augen
     c.setFillColor(INK_BLACK)
     c.circle(cx - r * 0.28, cy + r * 0.15, r * 0.10, stroke=0, fill=1)
     c.circle(cx + r * 0.28, cy + r * 0.15, r * 0.10, stroke=0, fill=1)
 
-    c.setLineWidth(max(2, r * 0.05))
+    # Mund
+    c.setLineWidth(max(1.5, r * 0.05))
     c.arc(cx - r * 0.35, cy - r * 0.10, cx + r * 0.35, cy + r * 0.20, 200, 140)
 
+    # Zunge
     c.setFillColor(colors.HexColor(EDDIE_PURPLE))
     c.roundRect(cx - r * 0.10, cy - r * 0.35, r * 0.20, r * 0.22, r * 0.08, stroke=0, fill=1)
     c.restoreState()
 
 
-def _draw_xp_bar(c: canvas.Canvas, x: float, y: float, w: float, h: float, progress: float, label: str):
-    """Minimal, KDP-safe XP progress bar."""
-    progress = max(0.0, min(1.0, float(progress)))
-    c.saveState()
-    
-    # outline
-    c.setStrokeColor(INK_BLACK)
-    c.setLineWidth(0.8)
-    c.rect(x, y, w, h, stroke=1, fill=0)
-    
-    # fill
-    if progress > 0:
-        c.setFillColor(INK_BLACK)
-        c.rect(x, y, w * progress, h, stroke=0, fill=1)
-        
-    # label (small, clean)
-    c.setFillColor(INK_BLACK)
-    _set_font(c, False, 8)
-    c.drawString(x, y + h + 0.06 * inch, label)
-    
-    c.restoreState()
-
-
 def _draw_eddie_guide_stamp(c: canvas.Canvas, pw: float, ph: float, safe: float, cum_xp: int, total_xp: int):
-    """Eddie + XP Bar on every mission page (bottom-right, inside safe)."""
-    # Eddie position
+    """Eddie führt durch die Aufgaben (unten rechts) + XP bar."""
     ed_x = pw - safe - GUIDE_MARGIN
-    ed_y = safe + GUIDE_MARGIN + 0.10 * inch # Leicht angehoben für den XP-Balken
+    ed_y = safe + GUIDE_MARGIN + 0.10 * inch
     _draw_eddie(c, ed_x, ed_y, GUIDE_R)
 
-    # XP bar under Eddie
     bar_w = 1.35 * inch
     bar_h = 0.10 * inch
     bar_x = pw - safe - bar_w - 0.05 * inch
     bar_y = safe + 0.12 * inch
+    progress = float(cum_xp) / float(max(1, total_xp))
 
-    _draw_xp_bar(
-        c,
-        bar_x,
-        bar_y,
-        bar_w,
-        bar_h,
-        progress=cum_xp / max(1, total_xp),
-        label=f"XP: {cum_xp}/{total_xp}",
-    )
+    c.saveState()
+    c.setStrokeColor(INK_BLACK)
+    c.setLineWidth(0.8)
+    c.rect(bar_x, bar_y, bar_w, bar_h, stroke=1, fill=0)
+    if progress > 0:
+        c.setFillColor(INK_BLACK)
+        c.rect(bar_x, bar_y, bar_w * min(1.0, progress), bar_h, stroke=0, fill=1)
+    c.restoreState()
 
 
-def _draw_progress_dots(
-    c: canvas.Canvas,
-    x_right: float,
-    y: float,
-    current_idx: int,
-    total: int = 24,
-):
-    """
-    Tiny 24-dot progress bar (filled dots for completed/current).
-    Draw right-aligned starting at x_right.
-    """
+def _draw_progress_dots(c: canvas.Canvas, x_right: float, y: float, current_idx: int, total: int = 24):
     c.saveState()
     for i in range(total - 1, -1, -1):
         x = x_right - (total - 1 - i) * (2 * PROG_DOT_R + PROG_GAP)
-        filled = i <= current_idx
         c.setLineWidth(0.8)
         c.setStrokeColor(colors.white)
-        if filled:
+        if i <= current_idx:
             c.setFillColor(colors.white)
             c.circle(x, y, PROG_DOT_R, stroke=1, fill=1)
         else:
-            c.setFillColor(colors.transparent)
             c.circle(x, y, PROG_DOT_R, stroke=1, fill=0)
     c.restoreState()
 
 
 # =========================================================
-# 5) DYNAMIC QUEST OVERLAY (AUTO-SCALE + XP + STORY)
+# 5) DYNAMIC OVERLAY (MISSIONS)
 # =========================================================
-def _draw_quest_overlay(
-    c: canvas.Canvas,
-    pw: float,
-    ph: float,
-    bleed: float,
-    safe: float,
-    hour: int,
-    mission,
-    mission_idx: int,
-    mission_total: int,
-    xp_total: int,
-    debug: bool,
-):
+def _draw_quest_overlay(c, pw, ph, safe, hour, mission, m_idx, m_total, xp_total):
+    if qd is None:
+        raise RuntimeError(f"quest_data.py nicht verfügbar: {_QD_IMPORT_ERROR}")
+
     header_h = 0.75 * inch
     x0, y0, w = safe, ph - safe - header_h, pw - 2 * safe
-
     zone = qd.get_zone_for_hour(hour)
-    zone_rgb = qd.get_hour_color(hour)
-    fill = colors.Color(zone_rgb[0], zone_rgb[1], zone_rgb[2])
-
-    luminance = (0.2126 * zone_rgb[0] + 0.7152 * zone_rgb[1] + 0.0722 * zone_rgb[2])
-    tc = colors.white if luminance < 0.45 else INK_BLACK
+    z_rgb = qd.get_hour_color(hour)
+    fill = colors.Color(z_rgb[0], z_rgb[1], z_rgb[2])
+    lum = (0.21 * z_rgb[0] + 0.71 * z_rgb[1] + 0.07 * z_rgb[2])
+    tc = colors.white if lum < 0.45 else INK_BLACK
 
     c.saveState()
-
-    # Header box
     c.setFillColor(fill)
-    c.setStrokeColor(INK_BLACK)
     c.setLineWidth(1)
     c.rect(x0, y0, w, header_h, fill=1, stroke=1)
 
-    # Left header: time + zone
     c.setFillColor(tc)
     _set_font(c, True, 14)
     c.drawString(x0 + 0.18 * inch, y0 + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
 
-    # --- STORY PROGRESSION BADGE ---
-    try:
-        chap_num = getattr(mission, 'chapter', 1)
-        tot_chap = getattr(mission, 'total_chapters', 1)
-        story_txt = ZONE_STORY.get(zone.id, zone.atmosphere)
-        badge_text = f"KAPITEL {chap_num}/{tot_chap} • {zone.name} — {story_txt}"
-    except Exception:
-        badge_text = f"{zone.name} — {zone.atmosphere}"
-
-    c.setFillColor(INK_GRAY_70)
     _set_font(c, False, 8)
-    c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, badge_text)
+    c.setFillColor(INK_GRAY_70)
+    c.drawString(x0 + 0.18 * inch, y0 + 0.18 * inch, f"{zone.name} — {ZONE_STORY.get(zone.id, '')}")
+
     c.setFillColor(tc)
-
-    # Right header: Progress
     _set_font(c, True, 10)
-    right_pad = 0.18 * inch
-    c.drawRightString(x0 + w - right_pad, y0 + header_h - 0.28 * inch, f"MISSION {mission_idx+1:02d}/{mission_total:02d}")
-    _set_font(c, True, 10)
-    c.drawRightString(x0 + w - right_pad, y0 + 0.22 * inch, f"TOTAL XP: {xp_total}")
+    c.drawRightString(x0 + w - 0.18 * inch, y0 + header_h - 0.28 * inch, f"MISSION {m_idx+1:02d}/{m_total:02d}")
+    _draw_progress_dots(c, x0 + w - 0.18 * inch, y0 + header_h - 0.55 * inch, m_idx, m_total)
 
-    # 24-dot progress bar
-    dots_y = y0 + header_h - 0.55 * inch
-    dots_right = x0 + w - right_pad
-    _draw_progress_dots(c, dots_right, dots_y, current_idx=mission_idx, total=mission_total)
-
-    # Mission card area
-    cy = safe
-    max_ch = (y0 - safe) - (0.15 * inch)
-    pad_x = 0.18 * inch
-
-    sc = _autoscale_mission_text(mission, w, x0, pad_x, max_ch)
-    card_h = min(max_ch, max(1.85 * inch, sc["needed"]))
-
+    # Mission Card
+    card_h = 1.85 * inch
     c.setFillColor(colors.white)
-    c.setStrokeColor(INK_BLACK)
-    c.rect(x0, cy, w, card_h, fill=1, stroke=1)
-
-    y = cy + card_h - 0.18 * inch
+    c.rect(x0, safe, w, card_h, fill=1, stroke=1)
 
     c.setFillColor(INK_BLACK)
-    _set_font(c, True, sc["ts"])
-    c.drawString(x0 + pad_x, y - sc["tl"] + 2, f"MISSION: {mission.title}")
+    _set_font(c, True, 12)
+    c.drawString(x0 + 0.15 * inch, safe + card_h - 0.35 * inch, f"MISSION: {mission.title}")
+    c.drawRightString(x0 + w - 0.15 * inch, safe + card_h - 0.35 * inch, f"+{int(mission.xp)} XP")
 
-    _set_font(c, True, max(8, sc["ts"] - 2))
-    c.drawRightString(x0 + w - pad_x, y - sc["tl"] + 2, f"+{mission.xp} XP")
-
-    y -= sc["tl"] + 0.10 * inch
-
-    _set_font(c, True, sc["ls"])
-    c.drawString(x0 + pad_x, y - sc["ll"] + 2, "BEWEGUNG:")
-    _set_font(c, False, sc["bs"])
-    yy = y - sc["ll"] + 2
-    for l in sc["ml"]:
-        c.drawString(x0 + 1.05 * inch, yy, l)
-        yy -= sc["bl"]
-
-    y = yy - 0.06 * inch
-    _set_font(c, True, sc["ls"])
-    c.drawString(x0 + pad_x, y - sc["ll"] + 2, "DENKEN:")
-    _set_font(c, False, sc["bs"])
-    yy = y - sc["ll"] + 2
-    for l in sc["tl_lines"]:
-        c.drawString(x0 + 0.90 * inch, yy, l)
-        yy -= sc["bl"]
-
-    # Proof checkbox line
-    bx, box = x0 + pad_x, 0.20 * inch
-    c.rect(bx, cy + 0.18 * inch, box, box, fill=0, stroke=1)
-
-    _set_font(c, True, sc["ls"])
-    c.drawString(bx + box + 0.15 * inch, cy + 0.20 * inch, "PROOF:")
-
-    _set_font(c, False, sc["bs"])
-    pr = _fit_lines(_wrap_text_hard(mission.proof, FONTS["normal"], sc["bs"], w - 1.5 * inch), 1)[0]
-    c.drawString(bx + box + 0.75 * inch, cy + 0.20 * inch, pr)
-
-    if debug:
-        _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
+    _set_font(c, True, 9)
+    c.drawString(x0 + 0.15 * inch, safe + 1.1 * inch, "BEWEGUNG:")
+    c.drawString(x0 + 0.15 * inch, safe + 0.6 * inch, "DENKEN:")
+    _set_font(c, False, 9)
+    c.drawString(x0 + 1.1 * inch, safe + 1.1 * inch, (mission.movement or "")[:70])
+    c.drawString(x0 + 1.1 * inch, safe + 0.6 * inch, (mission.thinking or "")[:70])
 
     c.restoreState()
 
 
 # =========================================================
-# 6) PDF BUILDERS (INTERIOR & COVER & LISTING)
+# 6) PDF BUILDERS (KDP COMPLIANT 2026)
 # =========================================================
-def build_interior(
-    name: str,
-    uploads,
-    pages: int,
-    eddie_mark: bool,
-    kdp: bool,
-    intro: bool,
-    outro: bool,
-    start_hour: int,
-    diff: int,
-    debug_guides: bool,
-) -> bytes:
-    pw, ph, bleed, safe = _page_geometry(kdp)
+def build_interior(name, uploads, pages, kdp, start_hour, diff) -> bytes:
+    if qd is None:
+        raise RuntimeError(f"quest_data.py nicht verfügbar: {_QD_IMPORT_ERROR}")
+
+    pw, ph, _, safe = _page_geometry(bool(kdp))
+
+    # HARD RULE: min 24 pages (KDP interior)
+    pages_i = int(pages)
+    if pages_i < KDP_MIN_PAGES:
+        raise RuntimeError(f"KDP-Standard: Innen-PDF muss mindestens {KDP_MIN_PAGES} Seiten haben.")
 
     files = list(uploads or [])
     if not files:
         raise RuntimeError("Keine Bilder hochgeladen.")
 
-    photo_count = max(1, pages - (int(intro) + int(outro)))
+    # Wir bleiben bei deinem Modell: Intro + Outro sind fix enthalten
+    # (keine zusätzlichen Kapitel-Seiten; total pages bleibt stabil)
+    intro_pages = 1
+    outro_pages = 1
+    photo_count = pages_i - (intro_pages + outro_pages)
+    if photo_count <= 0:
+        raise RuntimeError("Seitenzahl zu klein für Intro/Outro.")
+
     final = (files * (photo_count // len(files) + 1))[:photo_count]
-    mission_total = len(final)
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(pw, ph))
+    _scrub_pdf_metadata(c)
 
     seed_base = _stable_seed(name)
 
-    # --- PRECOMPUTE HOURS, MISSIONS, ZONES, CHAPTERS ---
-    hours, missions, zones, chapter_idx = [], [], [], []
-    chap = 1
-    prev_zone_id = None
-    
+    missions = []
     for i in range(photo_count):
-        h_val = (start_hour + i) % 24
-        hours.append(h_val)
-        
-        seed = int(seed_base ^ (i << 1) ^ h_val) & 0xFFFFFFFF
-        m = qd.pick_mission_for_time(h_val, diff, seed)
-        missions.append(m)
-        
-        z = qd.get_zone_for_hour(h_val)
-        zones.append(z)
-        
-        if prev_zone_id is not None and z.id != prev_zone_id:
-            chap += 1
-        chapter_idx.append(chap)
-        prev_zone_id = z.id
+        h = (int(start_hour) + i) % 24
+        missions.append(qd.pick_mission_for_time(h, int(diff), int(seed_base ^ i)))
 
-    total_chapters = chapter_idx[-1] if chapter_idx else 1
     total_xp = sum(int(getattr(m, "xp", 0) or 0) for m in missions) or 1
     cum_xp = 0
 
-    # Intro page
-    if intro:
-        c.setFillColor(colors.white)
-        c.rect(0, 0, pw, ph, fill=1, stroke=0)
+    # Intro (NO page numbers)
+    c.setFillColor(colors.white)
+    c.rect(0, 0, pw, ph, fill=1, stroke=0)
+    _draw_eddie(c, pw / 2, ph / 2 + 0.5 * inch, 1.3 * inch)
+    c.setFillColor(INK_BLACK)
+    _set_font(c, True, 28)
+    c.drawCentredString(pw / 2, safe + 1.5 * inch, f"Eddies & {name}")
+    c.showPage()
 
-        c.setFillColor(INK_BLACK)
-        _set_font(c, True, 34)
-        c.drawCentredString(pw / 2, ph - safe - 0.65 * inch, "Willkommen bei Eddies")
-        _set_font(c, False, 22)
-        c.drawCentredString(pw / 2, ph - safe - 1.25 * inch, f"& {name}")
-        _draw_eddie(c, pw / 2, ph / 2, 1.3 * inch)
-
-        _set_font(c, False, 14)
-        c.setFillColor(INK_GRAY_70)
-        c.drawCentredString(pw / 2, safe + 0.75 * inch, "24 Stunden • 24 Missionen • Haken setzen")
-
-        if debug_guides:
-            _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
-
-        c.showPage()
-
-    # Mission pages
+    # Mission Pages
     for i, up in enumerate(final):
-        h_val = hours[i]
-        mission = missions[i]
-        zone = zones[i]
-        
-        mission.chapter = chapter_idx[i]
-        mission.total_chapters = total_chapters
-        
-        # --- BOSS-FIGHT / KAPITEL-TRENNSEITE ---
-        if i > 0 and chapter_idx[i] > chapter_idx[i-1]:
-            c.saveState()
-            c.setFillColor(INK_BLACK)
-            c.rect(0, 0, pw, ph, fill=1, stroke=0)
-            
-            c.setFillColor(colors.white)
-            _set_font(c, True, 26)
-            c.drawCentredString(pw / 2.0, ph / 2.0 + 0.8 * inch, f"KAPITEL {mission.chapter}")
-            
-            _set_font(c, False, 14)
-            c.drawCentredString(pw / 2.0, ph / 2.0 - 0.4 * inch, f"Willkommen in: {zone.name}")
-            
-            if debug_guides:
-                _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
-                
-            c.restoreState()
-            c.showPage()
+        h = (int(start_hour) + i) % 24
 
-        # Render User Image
-        data = up.getvalue()
-        sk = _cv_sketch_from_bytes(data)
-        pil = Image.fromarray(sk).convert("L")
+        img_sk = _cv_sketch_from_bytes(up.getvalue())
+        pil = Image.fromarray(img_sk).convert("L")
 
+        # Center Crop & Resize to page pixels @ 300dpi
         sw, sh = pil.size
         s = min(sw, sh)
-
         pil = pil.crop(((sw - s) // 2, (sh - s) // 2, (sw + s) // 2, (sh + s) // 2)).resize(
             (int(pw * DPI / inch), int(ph * DPI / inch)),
             Image.LANCZOS,
@@ -622,84 +377,44 @@ def build_interior(
 
         ib = io.BytesIO()
         pil.save(ib, "PNG")
-        ib.seek(0)
+        ib.seek(0)  # CRITICAL
         c.drawImage(ImageReader(ib), 0, 0, pw, ph)
 
-        cum_xp += int(getattr(mission, "xp", 0) or 0)
-
-        _draw_quest_overlay(
-            c=c,
-            pw=pw,
-            ph=ph,
-            bleed=bleed,
-            safe=safe,
-            hour=h_val,
-            mission=mission,
-            mission_idx=i,
-            mission_total=mission_total,
-            xp_total=cum_xp,
-            debug=bool(debug_guides),
-        )
-
-        # Eddie as true GUIDE + XP Tracker on every mission page
+        cum_xp += int(getattr(missions[i], "xp", 0) or 0)
+        _draw_quest_overlay(c, pw, ph, safe, h, missions[i], i, len(final), cum_xp)
         _draw_eddie_guide_stamp(c, pw, ph, safe, cum_xp, total_xp)
-
         c.showPage()
 
-    # Outro page
-    if outro:
-        c.setFillColor(colors.white)
-        c.rect(0, 0, pw, ph, fill=1, stroke=0)
-
-        _draw_eddie(c, pw / 2, ph / 2 + 0.6 * inch, 1.5 * inch)
-        c.setFillColor(INK_BLACK)
-        _set_font(c, True, 30)
-        c.drawCentredString(pw / 2, safe + 1.75 * inch, "Quest abgeschlossen!")
-
-        _set_font(c, False, 14)
-        c.setFillColor(INK_GRAY_70)
-        c.drawCentredString(pw / 2, safe + 1.25 * inch, f"Dein Score: {cum_xp} XP")
-
-        if debug_guides:
-            _draw_kdp_debug_guides(c, pw, ph, bleed, safe)
-
-        c.showPage()
+    # Outro (NO page numbers)
+    c.setFillColor(colors.white)
+    c.rect(0, 0, pw, ph, fill=1, stroke=0)
+    _draw_eddie(c, pw / 2, ph / 2, 1.2 * inch)
+    _set_font(c, True, 24)
+    c.setFillColor(INK_BLACK)
+    c.drawCentredString(pw / 2, safe + 1.0 * inch, "Quest abgeschlossen!")
+    c.showPage()
 
     c.save()
-    buf.seek(0)
     return buf.getvalue()
 
 
-def build_cover(name: str, pages: int, paper: str) -> bytes:
-    sw = float(pages) * PAPER_FACTORS.get(paper, 0.002252) * inch
-    sw = max(sw, 0.001 * inch)
-    sw = round(sw / (0.001 * inch)) * (0.001 * inch)
-
+def build_cover(name, pages, paper) -> bytes:
+    sw = round(float(pages) * PAPER_FACTORS.get(paper, 0.00225) * 1000) / 1000 * inch
     cw, ch = (2 * TRIM) + sw + (2 * BLEED), TRIM + (2 * BLEED)
-
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(cw, ch))
+    _scrub_pdf_metadata(c)
 
     c.setFillColor(colors.white)
     c.rect(0, 0, cw, ch, fill=1, stroke=0)
 
-    # spine area
+    # Spine
     c.setFillColor(INK_BLACK)
     c.rect(BLEED + TRIM, BLEED, sw, TRIM, fill=1, stroke=0)
 
-    if pages >= SPINE_TEXT_MIN_PAGES:
-        c.saveState()
-        c.setFillColor(colors.white)
-        _set_font(c, True, 10)
-        c.translate(BLEED + TRIM + sw / 2, BLEED + TRIM / 2)
-        c.rotate(90)
-        c.drawCentredString(0, -4, f"EDDIES & {name}".upper())
-        c.restoreState()
-
-    # front cover area
+    # Front cover (right side)
     fx = BLEED + TRIM + sw
     _draw_eddie(c, fx + TRIM / 2, BLEED + TRIM * 0.58, TRIM * 0.18)
-
     c.setFillColor(INK_BLACK)
     _set_font(c, True, 44)
     c.drawCentredString(fx + TRIM / 2, BLEED + TRIM * 0.80, "EDDIES")
@@ -707,181 +422,54 @@ def build_cover(name: str, pages: int, paper: str) -> bytes:
     c.drawCentredString(fx + TRIM / 2, BLEED + TRIM * 0.73, f"& {name}")
 
     c.save()
-    buf.seek(0)
     return buf.getvalue()
 
 
-def build_listing_text(child_name: str) -> str:
-    cn = (child_name or "").strip()
-    title = "Eddies" if cn.lower() in {"eddie", "eddies"} else f"Eddies & {cn}"
-    keywords = [
-        "personalisiertes malbuch kinder",
-        "malbuch mit eigenen fotos",
-        "geschenk kinder personalisiert",
-        "kinder malbuch ab 4 jahre",
-        "abenteuer buch kinder",
-        "24 missionen kinder",
-        "ausmalbilder aus fotos",
-    ]
-    html = """<h3>24 Stunden. 24 Missionen. Dein Kind als Held.</h3>
-<p>Aus deinen Fotos entstehen Ausmalbilder – und jede Seite enthält eine Mini-Quest:
-<b>Bewegung</b> + <b>Denkaufgabe</b> + <b>XP</b> zum Abhaken.</p>
-<ul>
-  <li><b>Personalisiert:</b> Seiten basieren auf deinen hochgeladenen Bildern.</li>
-  <li><b>24h-Quest-System:</b> Zeit → Zone → Mission (spielerisch, ohne Druck).</li>
-  <li><b>Druckoptimiert:</b> 300 DPI Layout, klare Schwarzwerte, saubere Ränder.</li>
-</ul>
-<p><i>Eddies bleibt schwarz-weiß als Guide – dein Kind macht die Welt bunt.</i></p>
-"""
-    return "\n".join(
-        [
-            "READY-TO-PUBLISH LISTING BUNDLE",
-            f"TITEL: {title}",
-            "",
-            "KEYWORDS (7 Felder):",
-            "\n".join([f"{i+1}. {k}" for i, k in enumerate(keywords)]),
-            "",
-            "BESCHREIBUNG (HTML):",
-            html,
-        ]
-    )
-
-
 # =========================================================
-# 7) UI & SESSION HANDLING
+# 7) STREAMLIT UI
 # =========================================================
 st.set_page_config(page_title=APP_TITLE, layout="centered", page_icon=APP_ICON)
 
-if "assets" not in st.session_state:
-    st.session_state.assets = None
-
-
-def _tmp(prefix: str, suffix: str, data: bytes) -> str:
-    with tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False) as tf:
-        tf.write(data)
-        return tf.name
-
-
-st.markdown(f"<h1 style='text-align:center;'>{APP_TITLE} ULTIMATE</h1>", unsafe_allow_html=True)
-
-if qd is None:
-    st.error("quest_data.py konnte nicht geladen werden. Fix das zuerst, sonst gibt’s keine Missionen.")
-    st.code(_QD_IMPORT_ERROR or "Unbekannter Import-Fehler", language="text")
-    st.stop()
+st.markdown(
+    "<style>div[data-testid='stFileUploader'] small { display: none !important; }</style>",
+    unsafe_allow_html=True,
+)
+st.markdown(f"<h1 style='text-align:center;'>{APP_TITLE} ULTIMATE 2026</h1>", unsafe_allow_html=True)
 
 with st.container(border=True):
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         name = st.text_input("Name", value="Eddie")
-        age = st.number_input("Alter", 3, 99, 5)
-    with col2:
-        if "pages" not in st.session_state:
-            st.session_state.pages = KDP_MIN_PAGES
-            
-        pages = st.number_input(
-            "Seiten",
-            min_value=KDP_MIN_PAGES,
-            max_value=300,
-            step=2,
-            key="pages",
-        )
+        age = st.number_input("Alter", 3, 12, 5)
+    with c2:
+        pages = st.number_input("Seiten", KDP_MIN_PAGES, 100, 24, step=2)
+        paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()))
 
-        # Safety: falls jemand per Tastatur odd reinschreibt
-        if int(pages) % 2 != 0:
-            st.info("ℹ️ Seitenzahl wurde auf die nächste gerade Zahl angehoben (Print-Safety).")
-            st.session_state.pages = int(pages) + 1
-            pages = int(st.session_state.pages)
+    uploads = st.file_uploader("Fotos hochladen", accept_multiple_files=True, type=["jpg", "png", "jpeg"])
 
-        paper = st.selectbox("Papier", list(PAPER_FACTORS.keys()), key="paper")
+if uploads:
+    st.markdown(f"**📷 Bilder: {len(uploads)}**")
+    idx = st.slider("Vorschau", 1, len(uploads), 1) if len(uploads) > 1 else 1
+    st.image(Image.open(io.BytesIO(uploads[idx - 1].getvalue())), use_container_width=True)
 
-    kdp = st.toggle("KDP-Mode (Bleed)", True)
-    debug_guides = st.toggle("🧪 KDP Preflight Debug (Bleed/Safe)", False)
-    uploads = st.file_uploader("Fotos", accept_multiple_files=True, type=["jpg", "png", "jpeg"])
-
-can_build = False
-override_res = False
-
-if uploads and name:
-    pw, ph, _, _ = _page_geometry(bool(kdp))
-    target_px = int(min(pw, ph) * DPI / inch)  # z.B. 2625px für KDP Bleed
-
-    small_files = []
-    for up in uploads:
-        data = up.getvalue()
-        try:
-            with Image.open(io.BytesIO(data)) as img:
-                w, h = img.size
-                if min(w, h) < target_px:
-                    small_files.append((up.name, w, h))
-        except Exception:
-            pass
-
-    if small_files:
-        st.warning(
-            f"⚠️ {len(small_files)} Foto(s) sind kleiner als die empfohlene Zielauflösung ({target_px}px). "
-            "Das kann zu unscharfem Druck führen."
-        )
-        with st.expander("Details ansehen"):
-            for sf, fw, fh in small_files:
-                st.write(f"- {sf} ({fw}x{fh} px)")
-        override_res = st.toggle("🚨 Warnung ignorieren und trotzdem generieren (Auf eigene Gefahr)", False)
-        can_build = override_res
+if st.button("🚀 KDP-Buch generieren", disabled=not (uploads and name)):
+    if qd is None:
+        st.error(f"quest_data.py konnte nicht geladen werden: {_QD_IMPORT_ERROR}")
     else:
-        st.success(f"✅ Alle {len(uploads)} Fotos erfüllen die 300-DPI-Anforderung (≥ {target_px}px).")
-        can_build = True
+        with st.spinner("Erstelle druckfertige PDFs..."):
+            diff = 1 if age <= 4 else 2 if age <= 6 else 3
+            int_pdf = build_interior(name, uploads, int(pages), True, 6, diff)
+            cov_pdf = build_cover(name, int(pages), paper)
 
-if st.button("🚀 Buch generieren", disabled=not can_build):
-    with st.spinner("AUTO-SCALE & PDF-Hardening..."):
-        diff = 1 if age <= 4 else 2 if age <= 6 else 3 if age <= 9 else 4
+            st.session_state.pdfs = {"int": int_pdf, "cov": cov_pdf, "name": name}
+            st.success("Assets bereit!")
 
-        int_pdf = build_interior(
-            name=name,
-            uploads=uploads,
-            pages=int(pages),
-            eddie_mark=False,      # watermark optional; guide is always on
-            kdp=bool(kdp),
-            intro=True,
-            outro=True,
-            start_hour=6,
-            diff=diff,
-            debug_guides=bool(debug_guides),
-        )
+if "pdfs" in st.session_state:
+    p = st.session_state.pdfs
+    st.download_button("📘 Interior (KDP)", p["int"], f"Int_{p['name']}.pdf")
+    st.download_button("🎨 Cover (KDP)", p["cov"], f"Cov_{p['name']}.pdf")
 
-        cov_pdf = build_cover(
-            name=name,
-            pages=int(pages),
-            paper=paper,
-        )
-
-        listing_txt = build_listing_text(name)
-
-        if st.session_state.assets:
-            for f in st.session_state.assets.values():
-                if isinstance(f, str) and os.path.exists(f):
-                    try:
-                        os.remove(f)
-                    except Exception:
-                        pass
-
-        st.session_state.assets = {
-            "int": _tmp("int_", ".pdf", int_pdf),
-            "cov": _tmp("cov_", ".pdf", cov_pdf),
-            "listing": _tmp("list_", ".txt", listing_txt.encode("utf-8")),
-            "name": name,
-        }
-        st.success("KDP-Assets bereit!")
-
-if st.session_state.assets:
-    a = st.session_state.assets
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        with open(a["int"], "rb") as f:
-            st.download_button("📘 Interior", f, file_name=f"Int_{a['name']}.pdf")
-    with col2:
-        with open(a["cov"], "rb") as f:
-            st.download_button("🎨 Cover", f, file_name=f"Cov_{a['name']}.pdf")
-    with col3:
-        with open(a["listing"], "rb") as f:
-            st.download_button("📝 Listing (SEO)", f, file_name=f"Listing_{a['name']}.txt")
-
-st.markdown("<div style='text-align:center; color:grey;'>Eddies Welt © 2026</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center; color:grey; margin-top:2rem;'>Eddies Welt © 2026 | Druckfertig für Amazon KDP</div>",
+    unsafe_allow_html=True,
+)
