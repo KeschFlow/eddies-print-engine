@@ -327,8 +327,7 @@ def build_interior(name, uploads, pages, kdp, start_hour, diff) -> bytes:
     if not files:
         raise RuntimeError("Keine Bilder hochgeladen.")
 
-    # Wir bleiben bei deinem Modell: Intro + Outro sind fix enthalten
-    # (keine zusätzlichen Kapitel-Seiten; total pages bleibt stabil)
+    # Intro + Outro fix enthalten
     intro_pages = 1
     outro_pages = 1
     photo_count = pages_i - (intro_pages + outro_pages)
@@ -473,3 +472,4 @@ st.markdown(
     "<div style='text-align:center; color:grey; margin-top:2rem;'>Eddies Welt © 2026 | Druckfertig für Amazon KDP</div>",
     unsafe_allow_html=True,
 )
+```0
