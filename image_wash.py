@@ -1,69 +1,55 @@
+# =========================================================
+# image_wash.py (Eddies 2026 — UPLOAD SANITIZER)
+# - Fixes EXIF orientation issues
+# - Converts weird modes to RGB
+# - Re-encodes safely (JPEG or PNG)
+# - Prevents broken/corrupt image bytes from crashing OpenCV/Pillow
+# =========================================================
 from __future__ import annotations
 
 import io
-import os
-import tempfile
-import hashlib
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from PIL import Image, ImageOps
 
-from PIL import Image, ImageOps, ImageFile
+MAX_SIDE = 10000  # safety; avoids absurdly huge images killing memory
 
-# Robust gegen kaputte/abgeschnittene JPEGs
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-@dataclass(frozen=True)
-class WashedImage:
-    bytes: bytes
-    ext: str
-    sha256: str
-    size: Tuple[int, int]
-
-def _sha(b: bytes) -> str:
-    return hashlib.sha256(b).hexdigest()
-
-def wash_image_bytes(
-    raw: bytes,
-    prefer_jpeg: bool = True,
-    jpeg_quality: int = 92,
-) -> WashedImage:
+def wash_image_bytes(b: bytes) -> bytes:
     """
-    Normalisiert Bildbytes:
-    - Fix EXIF orientation
-    - Strip metadata
-    - Re-encode (JPEG/PNG)
-    Ergebnis ist "sauber" -> keine SOS-Logs.
+    Returns sanitized bytes (JPEG) by default.
+    - Load via Pillow
+    - Apply EXIF transpose
+    - Convert to RGB (strip alpha by compositing onto white)
+    - Clamp size
+    - Re-encode cleanly
     """
-    if not raw:
-        raise ValueError("empty image")
+    if not b:
+        raise ValueError("empty image bytes")
 
-    with Image.open(io.BytesIO(raw)) as im:
+    bio = io.BytesIO(b)
+    with Image.open(bio) as im:
+        im.load()
+
+        # fix EXIF rotation
         im = ImageOps.exif_transpose(im)
 
-        # Alpha? -> PNG, sonst JPEG
-        has_alpha = ("A" in im.getbands()) or (im.mode in ("RGBA", "LA"))
-        if has_alpha or not prefer_jpeg:
-            out = io.BytesIO()
-            im = im.convert("RGBA") if has_alpha else im.convert("RGB")
-            im.save(out, format="PNG", optimize=True)
-            b = out.getvalue()
-            return WashedImage(bytes=b, ext="png", sha256=_sha(b), size=im.size)
+        # clamp size (safety)
+        w, h = im.size
+        m = max(w, h)
+        if m > MAX_SIDE:
+            scale = MAX_SIDE / float(m)
+            im = im.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+        # normalize mode
+        if im.mode in ("RGBA", "LA"):
+            # composite on white
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        elif im.mode != "RGB":
+            im = im.convert("RGB")
 
         out = io.BytesIO()
-        im = im.convert("RGB")
-        # progressive=False verhindert manche kaputte Marker-Setups
-        im.save(out, format="JPEG", quality=jpeg_quality, optimize=True, progressive=False)
-        b = out.getvalue()
-        return WashedImage(bytes=b, ext="jpg", sha256=_sha(b), size=im.size)
-
-def wash_to_tempfile(raw: bytes) -> str:
-    """
-    Spült Upload direkt auf Disk (OOM-Schutz).
-    Gibt Pfad zurück.
-    """
-    w = wash_image_bytes(raw)
-    fd, path = tempfile.mkstemp(prefix="eddie_wash_", suffix=f".{w.ext}")
-    os.close(fd)
-    with open(path, "wb") as f:
-        f.write(w.bytes)
-    return path
+        # always output JPEG for predictable OpenCV decode
+        im.save(out, format="JPEG", quality=95, optimize=True, progressive=True)
+        out.seek(0)
+        return out.getvalue()
