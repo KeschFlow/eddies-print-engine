@@ -3,134 +3,744 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Eddies Questbuch – Start</title>
-  <meta name="description" content="Fotos hochladen, PDF erstellen, zuhause ausdrucken: Eddies Questbuch." />
+  <title>Eddies Questbuch – Aus euren Fotos wird ein echtes Abenteuer (PDF in Minuten)</title>
+  <meta name="description" content="Personalisiertes Questbuch für Kinder: Fotos hochladen → PDF erstellen → zuhause drucken. 24 Missionen, kinderleicht, bildschirmfrei. Perfekt als Geschenk." />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#7c3aed" />
+
+  <!-- OpenGraph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Eddies Questbuch – Aus euren Fotos wird ein echtes Abenteuer" />
+  <meta property="og:description" content="Fotos hochladen → PDF erstellen → zuhause drucken. 24 Missionen, bildschirmfrei, personalisiert." />
 
   <style>
-    :root { 
-      --bg:#0b0f17; 
-      --card:#121a27; 
-      --text:#eef2ff; 
-      --muted:#b8c0d9; 
-      --accent:#7dd3fc; 
+    :root{
+      --bg:#07060b;
+      --bg2:#0d0a16;
+      --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.08);
+      --stroke: rgba(255,255,255,.10);
+      --text:#f5f3ff;
+      --muted: rgba(245,243,255,.72);
+      --muted2: rgba(245,243,255,.55);
+      --purple:#7c3aed;
+      --purple2:#a78bfa;
+      --lime:#a3ffbf;
+      --warn:#ffcf5b;
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --shadow2: 0 10px 30px rgba(0,0,0,.35);
+      --r: 22px;
+      --r2: 16px;
+      --max: 1080px;
     }
 
-    body {
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
       margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: radial-gradient(1200px 700px at 20% 0%, #152040, var(--bg));
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% -5%, rgba(124,58,237,.35), transparent 55%),
+        radial-gradient(900px 600px at 100% 10%, rgba(167,139,250,.20), transparent 45%),
+        radial-gradient(900px 600px at 30% 110%, rgba(163,255,191,.08), transparent 50%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      overflow-x:hidden;
     }
 
-    .wrap {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 28px 18px 60px;
+    a{ color:inherit; }
+    .wrap{ max-width: var(--max); margin: 0 auto; padding: 18px 16px 64px; }
+
+    /* Topbar */
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:10px 0 8px;
     }
-
-    .card {
-      background: rgba(18,26,39,.9);
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: 22px;
-      padding: 22px;
-      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      text-decoration:none;
     }
+    .mark{
+      width:38px; height:38px; border-radius: 14px;
+      background:
+        radial-gradient(12px 12px at 50% 35%, rgba(255,255,255,.22), transparent 60%),
+        linear-gradient(135deg, rgba(124,58,237,.95), rgba(167,139,250,.85));
+      box-shadow: 0 10px 24px rgba(124,58,237,.25);
+      position:relative; border:1px solid rgba(255,255,255,.14);
+    }
+    /* tongue mark */
+    .mark:after{
+      content:"";
+      position:absolute;
+      left:50%; top:58%;
+      transform:translate(-50%,-50%);
+      width:14px; height:18px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.9);
+      opacity:.14;
+    }
+    .brand b{ letter-spacing:.2px; }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.10);
+      color: var(--muted);
+      font-size: 13px;
+      white-space:nowrap;
+    }
+    .pill i{ width:7px; height:7px; border-radius:99px; background: var(--lime); display:inline-block; }
 
-    h1 { font-size: 30px; margin: 0 0 6px; }
-    .sub { color: var(--muted); margin: 0 0 18px; }
-
-    .grid {
+    /* Hero */
+    .hero{
+      margin-top: 10px;
       display:grid;
-      gap: 14px;
       grid-template-columns: 1fr;
-      margin-top: 14px;
+      gap: 14px;
+      align-items:stretch;
+    }
+    @media (min-width: 900px){
+      .hero{ grid-template-columns: 1.1fr .9fr; gap: 16px; }
     }
 
-    @media (min-width: 760px){
-      .grid{ grid-template-columns: 1.2fr .8fr; }
+    .card{
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      backdrop-filter: blur(8px);
     }
 
-    .step {
-      background: rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.08);
-      border-radius: 16px;
-      padding: 14px;
+    .h-eyebrow{
+      display:inline-flex; align-items:center; gap:10px;
+      font-size: 13px; color: var(--muted);
       margin-bottom: 10px;
     }
+    .badge{
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(124,58,237,.18);
+      border: 1px solid rgba(124,58,237,.35);
+      color: rgba(245,243,255,.92);
+      font-weight: 700;
+      letter-spacing:.2px;
+    }
 
-    .step b { color: var(--accent); }
+    h1{
+      margin: 6px 0 10px;
+      font-size: 34px;
+      line-height: 1.06;
+      letter-spacing: -0.7px;
+    }
+    @media (min-width: 900px){
+      h1{ font-size: 44px; }
+    }
+    .lead{
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.45;
+    }
 
-    .btns {
+    .ctaRow{ display:flex; flex-wrap:wrap; gap:10px; margin-top: 14px; }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      text-decoration:none;
+      font-weight: 800;
+      letter-spacing:.2px;
+      border: 1px solid transparent;
+      box-shadow: var(--shadow2);
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn.primary{
+      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      border-color: rgba(255,255,255,.14);
+      color: #0b0714;
+    }
+    .btn.primary span{
+      background: rgba(255,255,255,.85);
+      color:#140b25;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight:900;
+    }
+    .btn.ghost{
+      background: rgba(255,255,255,.05);
+      border-color: rgba(255,255,255,.14);
+      color: var(--text);
+    }
+    .btn:active{ transform: translateY(1px); }
+
+    .micro{
+      margin-top: 10px;
+      color: var(--muted2);
+      font-size: 13px;
+      line-height: 1.4;
       display:flex;
       gap:10px;
       flex-wrap:wrap;
-      margin-top: 16px;
+      align-items:center;
+    }
+    .micro .ok{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(163,255,191,.08);
+      border: 1px solid rgba(163,255,191,.18);
+      color: rgba(245,243,255,.82);
+    }
+    .dot{ width:6px; height:6px; border-radius:99px; background: rgba(163,255,191,.9); display:inline-block; }
+
+    /* Right hero preview */
+    .preview{
+      display:flex; flex-direction:column; gap:12px;
+      height:100%;
+    }
+    .mock{
+      flex:1;
+      border-radius: var(--r);
+      border:1px solid rgba(255,255,255,.10);
+      background:
+        radial-gradient(420px 220px at 30% 10%, rgba(124,58,237,.22), transparent 60%),
+        radial-gradient(420px 260px at 80% 10%, rgba(167,139,250,.16), transparent 55%),
+        rgba(255,255,255,.04);
+      padding: 16px;
+      position:relative;
+      overflow:hidden;
+      box-shadow: var(--shadow);
+    }
+    .mock .tag{
+      position:absolute; right:12px; top:12px;
+      font-size:12px;
+      color: rgba(245,243,255,.8);
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .mockGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .tile{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      padding: 10px;
+      min-height: 92px;
+    }
+    .tile h3{ margin:0 0 6px; font-size: 14px; letter-spacing:.2px; }
+    .tile p{ margin:0; font-size: 12px; color: var(--muted); line-height:1.35; }
+    .tile b{ color: rgba(245,243,255,.92); }
+
+    .proofRow{
+      display:flex; gap:10px; flex-wrap:wrap;
+    }
+    .proof{
+      flex:1;
+      min-width: 180px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .proof b{ color: rgba(245,243,255,.92); }
+
+    /* Sections */
+    .section{ margin-top: 16px; }
+    .section h2{
+      margin: 0 0 10px;
+      font-size: 20px;
+      letter-spacing: -.2px;
     }
 
-    a.btn {
-      display:inline-block;
-      padding: 12px 18px;
-      border-radius: 14px;
-      text-decoration:none;
-      font-weight:700;
-      transition: transform .1s ease;
+    .features{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media(min-width: 860px){
+      .features{ grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .feature{
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: var(--r2);
+      padding: 14px;
+      box-shadow: var(--shadow2);
+      min-height: 112px;
+    }
+    .feature .icon{
+      width:34px; height:34px; border-radius: 12px;
+      display:inline-flex; align-items:center; justify-content:center;
+      background: rgba(124,58,237,.20);
+      border: 1px solid rgba(124,58,237,.35);
+      margin-bottom: 8px;
+      font-weight: 900;
+    }
+    .feature h3{ margin:0 0 6px; font-size: 15px; }
+    .feature p{ margin:0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+
+    /* Steps */
+    .steps{
+      display:grid; grid-template-columns: 1fr; gap: 10px;
+    }
+    @media(min-width: 860px){
+      .steps{ grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .step{
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: var(--r2);
+      padding: 14px;
+      position:relative;
+      overflow:hidden;
+    }
+    .step b{ color: rgba(245,243,255,.92); }
+    .step .n{
+      position:absolute; right: 12px; top: 10px;
+      font-size: 34px; font-weight: 1000;
+      color: rgba(167,139,250,.22);
+      letter-spacing:-2px;
+    }
+    .step p{ margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height:1.4; }
+
+    /* Pricing */
+    .pricing{
+      display:grid; grid-template-columns: 1fr; gap: 12px; align-items:stretch;
+    }
+    @media(min-width: 860px){
+      .pricing{ grid-template-columns: 1.2fr .8fr; }
+    }
+    .priceBox{
+      background: linear-gradient(180deg, rgba(124,58,237,.14), rgba(255,255,255,.04));
+      border:1px solid rgba(124,58,237,.28);
+      border-radius: var(--r);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .price{
+      display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    }
+    .price .big{ font-size: 34px; font-weight: 1000; letter-spacing:-1px; }
+    .price .small{ color: var(--muted); font-size: 13px; }
+    .list{
+      margin: 10px 0 0;
+      padding: 0;
+      list-style:none;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .list li{ display:flex; gap:10px; padding: 6px 0; }
+    .tick{
+      width:18px; height:18px; border-radius: 6px;
+      background: rgba(163,255,191,.12);
+      border:1px solid rgba(163,255,191,.22);
+      display:inline-flex; align-items:center; justify-content:center;
+      color: rgba(163,255,191,.95);
+      font-weight: 1000;
+      flex: 0 0 auto;
+      margin-top: 1px;
     }
 
-    a.btn:hover { transform: translateY(-2px); }
-
-    a.primary {
-      background: var(--accent);
-      color:#001018;
+    /* FAQ */
+    details{
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: var(--r2);
+      padding: 12px 14px;
+      box-shadow: var(--shadow2);
+    }
+    details + details{ margin-top: 10px; }
+    summary{
+      cursor:pointer;
+      font-weight: 900;
+      letter-spacing:.2px;
+    }
+    details p{
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
     }
 
-    .small {
+    /* Footer */
+    .footer{
+      margin-top: 18px;
+      color: var(--muted2);
+      font-size: 12px;
+      line-height:1.5;
+      display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+      opacity:.95;
+    }
+    .footer a{ color: rgba(245,243,255,.75); text-decoration:none; border-bottom:1px dashed rgba(255,255,255,.25); }
+    .footer a:hover{ color: rgba(245,243,255,.95); }
+
+    /* Sticky CTA */
+    .sticky{
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: rgba(7,6,11,.65);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,.10);
+      padding: 10px 12px;
+      z-index: 9999;
+    }
+    .sticky .inner{
+      max-width: var(--max);
+      margin: 0 auto;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .sticky .txt{
       font-size: 13px;
       color: var(--muted);
-      margin-top: 14px;
-      line-height: 1.4;
+      line-height:1.25;
+      display:flex; gap:10px; align-items:center;
     }
+    .sticky .txt b{ color: rgba(245,243,255,.92); }
+    .sticky .ctaMini{
+      display:flex; gap:10px; align-items:center;
+      white-space:nowrap;
+    }
+    .sticky .ctaMini a{
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 1000;
+      text-decoration:none;
+      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      color:#0b0714;
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: var(--shadow2);
+    }
+    .sticky .ctaMini a:active{ transform: translateY(1px); }
+
+    /* spacing bottom so sticky doesn't overlap content */
+    .spacer{ height: 64px; }
   </style>
+
+  <!-- JSON-LD (SEO) -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Product",
+    "name":"Eddies Questbuch (PDF)",
+    "description":"Personalisiertes Questbuch für Kinder: Fotos hochladen → PDF erstellen → zuhause drucken. 24 Missionen, bildschirmfrei.",
+    "brand":{"@type":"Brand","name":"Eddies World"},
+    "offers":{
+      "@type":"Offer",
+      "priceCurrency":"EUR",
+      "price":"0.00",
+      "availability":"https://schema.org/InStock"
+    }
+  }
+  </script>
 </head>
 
 <body>
   <div class="wrap">
-
-    <h1>Eddies Questbuch – so funktioniert’s</h1>
-    <p class="sub">Fotos rein → PDF raus → zuhause ausdrucken.</p>
-
-    <div class="grid">
-      <div class="card">
-
-        <h2>In 3 Schritten</h2>
-
-        <div class="step">
-          <b>1) Fotos auswählen</b><br/>
-          10–24 Fotos hochladen.
+    <div class="topbar">
+      <a class="brand" href="#" aria-label="Eddies Questbuch Start">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <b>Eddies Questbuch</b><br/>
+          <span style="color:var(--muted);font-size:12px">Fotos → Abenteuer → PDF</span>
         </div>
-
-        <div class="step">
-          <b>2) Buch erstellen</b><br/>
-          Skizzen + Missionen werden automatisch erzeugt.
-        </div>
-
-        <div class="step">
-          <b>3) Zuhause drucken</b><br/>
-          PDF öffnen → Drucken → fertig.
-        </div>
-
-        <div class="btns">
-          <!-- ✅ RICHTIGE STREAMLIT APP -->
-          <a class="btn primary"
-             href="https://eddies-print-engine.streamlit.app"
-             target="_blank"
-             rel="noopener">
-            Zur App (PDF erstellen)
-          </a>
-        </div>
-
+      </a>
+      <div class="pill" title="Keine Installation nötig">
+        <i></i> Sofort startklar
       </div>
     </div>
 
+    <div class="hero">
+      <!-- Left: Sales -->
+      <div class="card">
+        <div class="h-eyebrow">
+          <span class="badge">PERSONALISIERT</span>
+          <span>aus euren Fotos • 24 Missionen • bildschirmfrei</span>
+        </div>
+
+        <h1>Aus euren Fotos wird ein <span style="color:var(--purple2)">echtes Kinder-Abenteuer</span> – als druckbares PDF.</h1>
+
+        <p class="lead">
+          Du lädst Fotos hoch – wir machen daraus **skizzierte Ausmal-Seiten** + **Mini-Quests**.
+          Ideal für Kinder (auch Pre-Reader): **kurz vorlesen, Kind macht’s nach.**
+        </p>
+
+        <div class="ctaRow">
+          <!-- ✅ HIER LINK ZUR APP EINTRAGEN -->
+          <a class="btn primary" href="https://eddiesworld.streamlit.app" target="_blank" rel="noopener">
+            Jetzt PDF erstellen <span>2–5 Min</span>
+          </a>
+          <a class="btn ghost" href="#faq">Fragen? FAQ</a>
+        </div>
+
+        <div class="micro">
+          <div class="ok"><span class="dot"></span> Keine Anmeldung nötig</div>
+          <div class="ok"><span class="dot"></span> Zuhause drucken</div>
+          <div class="ok"><span class="dot"></span> Perfekt als Geschenk</div>
+        </div>
+
+        <div class="section" style="margin-top:14px">
+          <div class="proofRow">
+            <div class="proof"><b>Warum Eltern kaufen:</b><br/>Kinder sind stolz, weil sie „selbst“ im Buch sind.</div>
+            <div class="proof"><b>Warum Kinder lieben:</b><br/>Kleine Quests + Haken setzen = „noch eine Seite!“</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: preview / proof -->
+      <div class="preview">
+        <div class="mock">
+          <div class="tag">Look: Foto → Skizze</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div>
+              <div style="font-weight:1000;font-size:16px">Dein Kind als Held</div>
+              <div style="color:var(--muted);font-size:13px;line-height:1.35;margin-top:4px">
+                24 Stunden • 24 Missionen • Haken setzen
+              </div>
+            </div>
+            <div style="width:44px;height:44px;border-radius:18px;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.32);display:flex;align-items:center;justify-content:center;font-weight:1000">
+              🐶
+            </div>
+          </div>
+
+          <div class="mockGrid" aria-hidden="true">
+            <div class="tile">
+              <h3>📸 Foto rein</h3>
+              <p><b>10–24 Fotos</b> hochladen.</p>
+            </div>
+            <div class="tile">
+              <h3>✏️ Skizze raus</h3>
+              <p>Sauberer <b>Ausmal-Look</b>.</p>
+            </div>
+            <div class="tile">
+              <h3>🎯 Mini-Quest</h3>
+              <p>Bewegen • Denken • Haken.</p>
+            </div>
+            <div class="tile">
+              <h3>🖨️ Drucken</h3>
+              <p>PDF öffnen → <b>fertig</b>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-weight:1000">Für Pre-Reader geeignet</div>
+              <div style="color:var(--muted);font-size:13px;line-height:1.35;margin-top:4px">
+                Icons statt Textwüste. Eltern lesen kurz vor – Kind setzt um.
+              </div>
+            </div>
+            <div style="padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-weight:1000;color:rgba(245,243,255,.9)">
+              👶✅
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="section">
+      <div class="card">
+        <h2>Warum das funktioniert</h2>
+        <div class="features">
+          <div class="feature">
+            <div class="icon">🎁</div>
+            <h3>Geschenk-Level</h3>
+            <p>Personalisiert fühlt sich immer teurer an – auch wenn’s „nur“ ein PDF ist.</p>
+          </div>
+          <div class="feature">
+            <div class="icon">🧠</div>
+            <h3>Mini-Quests statt Langeweile</h3>
+            <p>Bewegen + Denken + Proof-Haken: kleine Siege, große Motivation.</p>
+          </div>
+          <div class="feature">
+            <div class="icon">🖨️</div>
+            <h3>In Minuten druckbar</h3>
+            <p>PDF erstellen, zuhause drucken, sofort nutzen – ohne Versand.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="section">
+      <div class="card">
+        <h2>So läuft’s ab</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="n">1</div>
+            <b>Fotos auswählen</b>
+            <p>10–24 Fotos vom Kind, Hund, Alltag, Abenteuer.</p>
+          </div>
+          <div class="step">
+            <div class="n">2</div>
+            <b>PDF erzeugen</b>
+            <p>Skizzen + Missionen werden automatisch erstellt.</p>
+          </div>
+          <div class="step">
+            <div class="n">3</div>
+            <b>Drucken & los</b>
+            <p>Ausmalen, Quests machen, Haken setzen. Fertig.</p>
+          </div>
+        </div>
+
+        <div class="ctaRow" style="margin-top:14px">
+          <a class="btn primary" href="https://eddiesworld.streamlit.app" target="_blank" rel="noopener">
+            Zur App (PDF erstellen) <span>Start</span>
+          </a>
+          <a class="btn ghost" href="#pricing">Preis & Paket</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div id="pricing" class="section">
+      <div class="pricing">
+        <div class="priceBox">
+          <h2 style="margin:0 0 8px">Was du bekommst</h2>
+
+          <div class="price">
+            <div class="big">Euer Questbuch</div>
+            <div class="small">als druckbares PDF • 24 Seiten/mehr möglich</div>
+          </div>
+
+          <ul class="list">
+            <li><span class="tick">✓</span> Skizzen-Look aus euren Fotos (Ausmal-Style)</li>
+            <li><span class="tick">✓</span> 24 Missionen (Bewegen/Denken/Proof)</li>
+            <li><span class="tick">✓</span> Pre-Reader-tauglich (Icons, kurze Tasks)</li>
+            <li><span class="tick">✓</span> KDP-ready Option (Bleed/Margins), wenn du’s publishen willst</li>
+          </ul>
+
+          <div class="ctaRow" style="margin-top:14px">
+            <a class="btn primary" href="https://eddiesworld.streamlit.app" target="_blank" rel="noopener">
+              Jetzt erstellen <span>Go</span>
+            </a>
+            <a class="btn ghost" href="#faq">FAQ</a>
+          </div>
+
+          <div style="margin-top:10px;color:var(--muted2);font-size:12px;line-height:1.45">
+            Hinweis: Preis/Bezahlung integrierst du später. Diese Seite ist „Conversion-ready“ und leitet aktuell direkt zur App weiter.
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin:0 0 10px">Trust-Checks</h2>
+          <div class="proof" style="min-width:auto">
+            <b>Datenschutz-Feeling:</b><br/>
+            Du lädst Fotos nur zum Erstellen hoch. (Wenn du später ausliefern willst: klare Policy ergänzen.)
+          </div>
+          <div style="height:10px"></div>
+          <div class="proof" style="min-width:auto">
+            <b>Druck-Sicherheit:</b><br/>
+            Saubere Ränder/Bleed-Optionen – damit’s nicht abgeschnitten wirkt.
+          </div>
+          <div style="height:10px"></div>
+          <div class="proof" style="min-width:auto">
+            <b>Eltern-Modus:</b><br/>
+            Kurz vorlesen, dann machen lassen. Null Diskussion.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div id="faq" class="section">
+      <div class="card">
+        <h2>FAQ</h2>
+
+        <details>
+          <summary>Für welches Alter ist das geeignet?</summary>
+          <p>Am stärksten funktioniert’s bei ca. 3–9 Jahren. Für Kinder, die noch nicht lesen: Pre-Reader-Modus (Icons + kurze Worte).</p>
+        </details>
+
+        <details>
+          <summary>Wie viele Fotos brauche ich?</summary>
+          <p>Optimal sind 10–24 Fotos. Mehr geht – aber 10–24 reicht für Vielfalt ohne Chaos.</p>
+        </details>
+
+        <details>
+          <summary>Kann ich das zuhause wirklich gut drucken?</summary>
+          <p>Ja. Öffne das PDF und drucke in „Tatsächliche Größe“ (oder „100%“). Für bestes Ergebnis: etwas dickeres Papier.</p>
+        </details>
+
+        <details>
+          <summary>Ist das auch für KDP/Publishing geeignet?</summary>
+          <p>Ja – mit KDP-Mode (Bleed/Margins). Wenn du publishen willst, können wir Cover/Spine/Preflight komplett sauber machen.</p>
+        </details>
+
+        <div class="ctaRow" style="margin-top:14px">
+          <a class="btn primary" href="https://eddiesworld.streamlit.app" target="_blank" rel="noopener">
+            Jetzt PDF erstellen <span>Start</span>
+          </a>
+          <a class="btn ghost" href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'}); return false;">Nach oben</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>© <span id="y"></span> Eddies World</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a href="#" onclick="alert('Impressum/Datenschutz hier verlinken.'); return false;">Impressum</a>
+        <a href="#" onclick="alert('Datenschutz hier verlinken.'); return false;">Datenschutz</a>
+        <a href="#" onclick="alert('Kontakt hier verlinken.'); return false;">Kontakt</a>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
   </div>
+
+  <!-- Sticky bottom CTA -->
+  <div class="sticky" role="region" aria-label="Schnellstart">
+    <div class="inner">
+      <div class="txt">
+        <b>Fotos → PDF → Drucken</b>
+        <span style="opacity:.7">in 2–5 Minuten</span>
+      </div>
+      <div class="ctaMini">
+        <a href="https://eddiesworld.streamlit.app" target="_blank" rel="noopener">PDF erstellen</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    // Optional: smooth anchor
+    document.querySelectorAll('a[href^="#"]').forEach(a=>{
+      a.addEventListener('click', (e)=>{
+        const id = a.getAttribute('href');
+        if(!id || id === '#') return;
+        const el = document.querySelector(id);
+        if(!el) return;
+        e.preventDefault();
+        el.scrollIntoView({behavior:'smooth', block:'start'});
+      });
+    });
+
+    // Optional: simple outbound tracking placeholder
+    // Replace console.log with your analytics later.
+    document.querySelectorAll('a[href^="http"]').forEach(a=>{
+      a.addEventListener('click', ()=>{
+        console.log("Outbound CTA:", a.href);
+      });
+    });
+  </script>
 </body>
 </html>
