@@ -1,113 +1,48 @@
-<!DOCTYPE html>
+﻿<!doctype html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eddies Print Engine | Dein eigenes Malbuch</title>
-    <meta name="description" content="Erstelle in 2 Minuten ein druckfertiges Malbuch für Amazon KDP. Dein Kind als Held. Kostenlos.">
-    <!-- Tailwind CSS für schnelles, modernes Design -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts: Inter & Eddie-Style Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .hero-pattern {
-            background-color: #ffffff;
-            background-image: radial-gradient(#7c3aed 0.5px, transparent 0.5px), radial-gradient(#7c3aed 0.5px, #ffffff 0.5px);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
-            opacity: 0.1;
-        }
-        .eddie-purple { color: #7c3aed; }
-        .bg-eddie-purple { background-color: #7c3aed; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Eddies Questbuch – Start</title>
+  <meta name="description" content="Fotos hochladen, PDF erstellen, zuhause ausdrucken: Eddies Questbuch." />
+  <style>
+    :root { --bg:#0b0f17; --card:#121a27; --text:#eef2ff; --muted:#b8c0d9; --accent:#7dd3fc; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: radial-gradient(1200px 700px at 20% 0%, #152040, var(--bg)); color:var(--text); }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 60px; }
+    .card { background: rgba(18,26,39,.9); border:1px solid rgba(255,255,255,.08); border-radius: 22px; padding: 22px; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+    h1 { font-size: 30px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 18px; }
+    .grid { display:grid; gap: 14px; grid-template-columns: 1fr; margin-top: 14px; }
+    @media (min-width: 760px){ .grid{ grid-template-columns: 1.2fr .8fr; } }
+    .step { background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 14px; }
+    .step b { color: var(--accent); }
+    .btns { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+    a.btn { display:inline-block; padding: 12px 14px; border-radius: 14px; text-decoration:none; font-weight:700; }
+    a.primary { background: var(--accent); color:#001018; }
+    a.ghost { border:1px solid rgba(255,255,255,.18); color: var(--text); }
+    .small { font-size: 13px; color: var(--muted); margin-top: 14px; line-height: 1.4; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-900 antialiased">
+<body>
+  <div class="wrap">
+    <h1>Eddies Questbuch – so funktioniert’s</h1>
+    <p class="sub">Fotos rein → PDF raus → zuhause ausdrucken.</p>
 
-    <!-- Header / Nav -->
-    <nav class="w-full py-6 px-6 flex justify-between items-center max-w-6xl mx-auto">
-        <div class="font-bold text-2xl tracking-tighter flex items-center gap-2">
-            🐶 <span class="eddie-purple">Eddies</span>Engine
+    <div class="grid">
+      <div class="card">
+        <h2>In 3 Schritten</h2>
+
+        <div class="step"><b>1) Fotos auswählen</b><br/>10–24 Fotos hochladen.</div>
+        <div class="step"><b>2) Buch erstellen</b><br/>Skizzen + Missionen werden automatisch erzeugt.</div>
+        <div class="step"><b>3) Zuhause drucken</b><br/>PDF öffnen → Drucken → fertig.</div>
+
+        <div class="btns">
+          <a class="btn primary" href="https://eddiesworld.streamlit.app" target="_blank">
+            Zur App (PDF erstellen)
+          </a>
         </div>
-        <!-- Status Indicator -->
-        <div class="hidden md:flex items-center gap-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
-            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            System Online v5.0
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <main class="relative pt-16 pb-24 lg:pt-32 max-w-6xl mx-auto px-6 text-center">
-        <!-- Background Pattern -->
-        <div class="absolute inset-0 z-0 hero-pattern mask-image-b"></div>
-
-        <div class="relative z-10 max-w-3xl mx-auto">
-            <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 text-gray-900">
-                Dein KDP-Malbuch.<br>
-                <span class="eddie-purple">In 2 Minuten fertig.</span>
-            </h1>
-            <p class="text-xl md:text-2xl text-gray-600 mb-12 leading-relaxed">
-                Lade Fotos hoch. Unsere Engine verwandelt sie in abenteuerliche Ausmalbilder mit Eddie als Guide. 
-                <br><strong>100% Druckfertiges PDF.</strong> Keine Anmeldung.
-            </p>
-
-            <!-- PRIMARY CTA -->
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href="https://eddiesworld.streamlit.app" target="_blank" 
-                   class="bg-eddie-purple hover:bg-purple-700 text-white text-xl font-bold py-4 px-10 rounded-xl shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-200 w-full sm:w-auto flex items-center justify-center gap-3">
-                   🚀 Jetzt Buch erstellen
-                </a>
-                <a href="#how-it-works" class="text-gray-500 font-semibold hover:text-gray-900 px-6 py-4 transition-colors">
-                    Wie funktioniert das?
-                </a>
-            </div>
-            <p class="mt-4 text-sm text-gray-400">Version 5.0 Enterprise • Kostenlose Nutzung</p>
-        </div>
-    </main>
-
-    <!-- Value Props / Features -->
-    <section id="how-it-works" class="bg-white py-24 border-t border-gray-100">
-        <div class="max-w-6xl mx-auto px-6">
-            <div class="grid md:grid-cols-3 gap-12">
-                <!-- Step 1 -->
-                <div class="text-left">
-                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-2xl font-bold mb-6">1</div>
-                    <h3 class="text-xl font-bold mb-3">Fotos hochladen</h3>
-                    <p class="text-gray-600">Wähle Bilder von deinem Kind, Haustier oder Haus. Alles bleibt privat im RAM-Speicher.</p>
-                </div>
-                <!-- Step 2 -->
-                <div class="text-left">
-                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-2xl font-bold mb-6">2</div>
-                    <h3 class="text-xl font-bold mb-3">KI-Skizzierung</h3>
-                    <p class="text-gray-600">Unser Algorithmus wandelt Fotos in klare Kantenzeichnungen um – perfekt zum Ausmalen.</p>
-                </div>
-                <!-- Step 3 -->
-                <div class="text-left">
-                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-2xl font-bold mb-6">3</div>
-                    <h3 class="text-xl font-bold mb-3">KDP-Ready PDF</h3>
-                    <p class="text-gray-600">Du erhältst ein PDF mit 300 DPI, Beschnittzugabe (Bleed) und geprüftem Layout.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Tech Specs for Pros -->
-    <section class="py-20 bg-gray-50">
-        <div class="max-w-4xl mx-auto px-6 text-center">
-            <h2 class="text-3xl font-bold mb-8">Optimiert für Amazon KDP</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-medium text-gray-500">
-                <div class="bg-white p-4 rounded shadow-sm">300 DPI High-Res</div>
-                <div class="bg-white p-4 rounded shadow-sm">8.5" x 8.5" Trim</div>
-                <div class="bg-white p-4 rounded shadow-sm">Autom. Bleed</div>
-                <div class="bg-white p-4 rounded shadow-sm">Smart Pagination</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 py-12 text-center text-gray-400 text-sm">
-        <p>© 2026 Eddies World. Built with Streamlit & Python.</p>
-    </footer>
-
+      </div>
+    </div>
+  </div>
 </body>
 </html>
