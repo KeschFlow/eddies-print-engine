@@ -436,8 +436,8 @@ def build_interior(name: str, uploads, total_pages: int, kdp: bool, intro: bool,
         c.drawImage(ImageReader(io.BytesIO(png_bytes)), 0, 0, pb.full_w, pb.full_h)
 
         h_val = hours[i]
-                mission = missions[i]
-                zone = zones[i]
+        mission = missions[i]
+        zone = zones[i]
                 
                 try:
                     cum_xp += int(mission.xp)
