@@ -5,31 +5,33 @@
 # - NO DPI warning gate (we always resize/upscale to target)
 # - Mirror margins + dynamic gutter + 300 DPI render target
 # - Front cover: auto collage from uploads (4-grid)
-# - Streamlit warning killed (no session_state/value conflict)
+# - Streamlit yellow warning killed (no session_state/value conflict)
+# - FIX: image_wash returns bytes (no .bytes)
+# - FIX: removed duplicate chapter-page block + bad indent
 # =========================================================
 
 from __future__ import annotations
 
+import gc
+import hashlib
 import io
 import os
-import gc
 import tempfile
-import hashlib
-from dataclasses import dataclass
-from typing import Dict, Any, List, Optional
 from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
-import streamlit as st
 import cv2
 import numpy as np
+import streamlit as st
 from PIL import Image, ImageDraw, ImageFile
-from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 import image_wash as iw
 
@@ -228,7 +230,15 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
         ll = ls * 1.22
         ml = _wrap_text_hard(getattr(mission, "movement", ""), FONTS["normal"], bs, body_max_w_move)
         tl_lines = _wrap_text_hard(getattr(mission, "thinking", ""), FONTS["normal"], bs, body_max_w_think)
-        needed = base_top + tl + gap_title + (ll * 2) + ((len(ml) + len(tl_lines)) * bl) + gap_sections + base_bottom
+        needed = (
+            base_top
+            + tl
+            + gap_title
+            + (ll * 2)
+            + ((len(ml) + len(tl_lines)) * bl)
+            + gap_sections
+            + base_bottom
+        )
         return {"ts": ts, "bs": bs, "ls": ls, "tl": tl, "bl": bl, "ll": ll, "ml": ml, "tl_lines": tl_lines, "needed": needed}
 
     ts, bs, ls = 13, 10, 10
@@ -250,35 +260,21 @@ def _autoscale_mission_text(mission, w: float, x0: float, pad_x: float, max_card
         think_allow = max(1, max_b - move_allow)
         sc["ml"] = _fit_lines(sc["ml"], move_allow)
         sc["tl_lines"] = _fit_lines(sc["tl_lines"], think_allow)
-        sc["needed"] = base_top + sc["tl"] + gap_title + (sc["ll"] * 2) + ((len(sc["ml"]) + len(sc["tl_lines"])) * sc["bl"]) + gap_sections + base_bottom
+        sc["needed"] = (
+            base_top
+            + sc["tl"]
+            + gap_title
+            + (sc["ll"] * 2)
+            + ((len(sc["ml"]) + len(sc["tl_lines"])) * sc["bl"])
+            + gap_sections
+            + base_bottom
+        )
 
     return sc
 
 
 def _stable_seed(s: str) -> int:
     return int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:8], "big")
-
-
-# =========================================================
-# DISK SPOOL (OOM shield)
-# =========================================================
-def _spool_bytes_to_disk(data: bytes, suffix: str = ".bin") -> str:
-    with tempfile.NamedTemporaryFile(prefix="spool_", suffix=suffix, delete=False) as tf:
-        tf.write(data)
-        return tf.name
-
-
-def _read_spooled(path: str) -> bytes:
-    with open(path, "rb") as f:
-        return f.read()
-
-
-def _safe_unlink(path: str) -> None:
-    try:
-        if path and os.path.exists(path):
-            os.remove(path)
-    except Exception:
-        pass
 
 
 # =========================================================
@@ -323,8 +319,10 @@ def _get_sketch_cached(img_bytes: bytes, target_w: int, target_h: int) -> bytes:
     out = _sketch_compute(img_bytes, target_w, target_h)
     cache[key] = out
     cache.move_to_end(key)
+
     while len(cache) > MAX_SKETCH_CACHE:
         cache.popitem(last=False)
+
     return out
 
 
@@ -392,7 +390,11 @@ def _draw_quest_overlay(
 
     c.setFillColor(tc)
     _set_font(c, True, 14)
-    c.drawString(x0 + 0.18 * inch, y_header_bottom + header_h - 0.50 * inch, f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}")
+    c.drawString(
+        x0 + 0.18 * inch,
+        y_header_bottom + header_h - 0.50 * inch,
+        f"{qd.fmt_hour(hour)}  {zone.icon}  {zone.name}",
+    )
     _set_font(c, False, 10)
     c.drawString(x0 + 0.18 * inch, y_header_bottom + 0.18 * inch, f"{zone.quest_type} • {zone.atmosphere}")
 
@@ -478,7 +480,7 @@ def _cover_collage_png(uploads, size_px: int, seed: int) -> Optional[bytes]:
             k += 1
             try:
                 raw = up.getvalue()
-                washed = iw.wash_image_bytes(raw).bytes
+                washed = iw.wash_image_bytes(raw)  # FIX: returns bytes
                 sk = _sketch_compute(washed, cell, cell)
                 tile = Image.open(io.BytesIO(sk)).convert("L")
             except Exception:
@@ -497,21 +499,6 @@ def _cover_collage_png(uploads, size_px: int, seed: int) -> Optional[bytes]:
     return out.getvalue()
 
 
-def _draw_chapter_page(c: canvas.Canvas, pb: PageBox, sl: float, sr: float, stb: float, chapter_no: int, zone_name: str, debug_guides: bool):
-    pw, ph = pb.full_w, pb.full_h
-    c.saveState()
-    c.setFillColorRGB(0.05, 0.07, 0.10)
-    c.rect(0, 0, pw, ph, fill=1, stroke=0)
-    c.setFillColorRGB(1, 1, 1)
-    _set_font(c, True, 26)
-    c.drawCentredString(pw / 2.0, ph / 2.0 + 0.8 * inch, f"KAPITEL {chapter_no}")
-    _set_font(c, False, 14)
-    c.drawCentredString(pw / 2.0, ph / 2.0 - 0.4 * inch, f"Willkommen in: {zone_name}")
-    c.restoreState()
-    if debug_guides:
-        _draw_kdp_debug_guides(c, pb, sl, sr, stb)
-
-
 def build_interior(
     name: str,
     uploads,
@@ -528,9 +515,7 @@ def build_interior(
     if not files:
         raise RuntimeError("Keine Bilder hochgeladen.")
 
-    # total_pages is user intent, but chapter pages add extra pages.
-    # We keep overlay pages for each photo; chapter pages are inserted in-between.
-    photo_count = max(1, int(total_pages) - (int(intro) + int(outro)))
+    photo_count = max(1, total_pages - (int(intro) + int(outro)))
     final = (files * (photo_count // len(files) + 1))[:photo_count]
 
     buf = io.BytesIO()
@@ -539,11 +524,7 @@ def build_interior(
     seed_base = _stable_seed(name)
 
     # --- PRECOMPUTE STORY PROGRESSION ---
-    hours: List[int] = []
-    missions: List[Any] = []
-    zones: List[Any] = []
-    chapter_idx: List[int] = []
-
+    hours, missions, zones, chapter_idx = [], [], [], []
     chap = 1
     prev_zone_id = None
     for i in range(photo_count):
@@ -554,17 +535,14 @@ def build_interior(
         missions.append(m)
         z = qd.get_zone_for_hour(h_val)
         zones.append(z)
-
-        if prev_zone_id is not None and getattr(z, "id", None) != prev_zone_id:
+        if prev_zone_id is not None and z.id != prev_zone_id:
             chap += 1
         chapter_idx.append(chap)
-        prev_zone_id = getattr(z, "id", None)
+        prev_zone_id = z.id
 
     total_chapters = chapter_idx[-1] if chapter_idx else 1
     current_page_idx = 0
-    cum_xp = 0
 
-    # Intro page
     if intro:
         sl, sr, stb = safe_margins_for_page(total_pages, kdp, current_page_idx, pb)
         c.setFillColor(colors.white)
@@ -585,39 +563,49 @@ def build_interior(
 
     target_w = int(pb.full_w * DPI / inch)
     target_h = int(pb.full_h * DPI / inch)
+    pw, ph = pb.full_w, pb.full_h
 
-    # Content pages
+    cum_xp = 0
+
     for i, up in enumerate(final):
-        # Insert chapter break page BEFORE the new chapter content page
+        # --- chapter break page (separate) ---
         if i > 0 and chapter_idx[i] > chapter_idx[i - 1]:
             sl, sr, stb = safe_margins_for_page(total_pages, kdp, current_page_idx, pb)
-            _draw_chapter_page(c, pb, sl, sr, stb, chapter_idx[i], zones[i].name, debug_guides)
+            zone = zones[i]
+            c.saveState()
+            c.setFillColorRGB(0.05, 0.07, 0.10)
+            c.rect(0, 0, pw, ph, fill=1, stroke=0)
+            c.setFillColorRGB(1, 1, 1)
+            _set_font(c, True, 26)
+            c.drawCentredString(pw / 2.0, ph / 2.0 + 0.8 * inch, f"KAPITEL {chapter_idx[i]}")
+            _set_font(c, False, 14)
+            c.drawCentredString(pw / 2.0, ph / 2.0 - 0.4 * inch, f"Willkommen in: {zone.name}")
+            c.restoreState()
+            if debug_guides:
+                _draw_kdp_debug_guides(c, pb, sl, sr, stb)
             c.showPage()
             current_page_idx += 1
 
         sl, sr, stb = safe_margins_for_page(total_pages, kdp, current_page_idx, pb)
 
-        # OOM shield: wash -> spool to disk -> read back -> sketch cache
         raw = up.getvalue()
-        washed = iw.wash_image_bytes(raw).bytes
-        wash_path = _spool_bytes_to_disk(washed, suffix=".img")
-        washed_disk = _read_spooled(wash_path)
-        _safe_unlink(wash_path)
+        try:
+            washed = iw.wash_image_bytes(raw)  # FIX: returns bytes
+        except Exception:
+            washed = raw  # fallback
 
-        png_bytes = _get_sketch_cached(washed_disk, target_w, target_h)
+        png_bytes = _get_sketch_cached(washed, target_w, target_h)
         c.drawImage(ImageReader(io.BytesIO(png_bytes)), 0, 0, pb.full_w, pb.full_h)
 
         h_val = hours[i]
         mission = missions[i]
         zone = zones[i]
 
-        # attach meta (safe)
         try:
             cum_xp += int(getattr(mission, "xp", 0))
             setattr(mission, "chapter", chapter_idx[i])
             setattr(mission, "total_chapters", total_chapters)
             setattr(mission, "cum_xp", cum_xp)
-            setattr(mission, "zone_id", getattr(zone, "id", ""))
         except Exception:
             pass
 
@@ -625,10 +613,9 @@ def build_interior(
         c.showPage()
         current_page_idx += 1
 
-        del raw, washed, washed_disk, png_bytes
+        del raw, washed, png_bytes
         gc.collect()
 
-    # Outro page
     if outro:
         sl, sr, stb = safe_margins_for_page(total_pages, kdp, current_page_idx, pb)
         c.setFillColor(colors.white)
@@ -637,9 +624,6 @@ def build_interior(
         c.setFillColor(INK_BLACK)
         _set_font(c, True, 30)
         c.drawCentredString(pb.full_w / 2, stb + 1.75 * inch, "Quest abgeschlossen!")
-        _set_font(c, False, 12)
-        c.setFillColor(INK_GRAY_70)
-        c.drawCentredString(pb.full_w / 2, stb + 1.25 * inch, f"Gesamt: {cum_xp} XP • Kapitel: {total_chapters}")
         if debug_guides:
             _draw_kdp_debug_guides(c, pb, sl, sr, stb)
         c.showPage()
@@ -653,7 +637,6 @@ def build_cover(name: str, pages: int, paper: str, uploads=None) -> bytes:
     sw = float(pages) * PAPER_FACTORS.get(paper, 0.002252) * inch
     sw = max(sw, 0.001 * inch)
     sw = round(sw / (0.001 * inch)) * (0.001 * inch)
-
     cw, ch = (2 * TRIM) + sw + (2 * BLEED), TRIM + (2 * BLEED)
 
     buf = io.BytesIO()
@@ -674,7 +657,7 @@ def build_cover(name: str, pages: int, paper: str, uploads=None) -> bytes:
         c.drawCentredString(0, -4, f"EDDIES & {name}".upper())
         c.restoreState()
 
-    # back
+    # back (left) minimal
     bx = BLEED
     c.setFillColor(colors.white)
     c.rect(bx, BLEED, TRIM, TRIM, fill=1, stroke=0)
@@ -683,12 +666,12 @@ def build_cover(name: str, pages: int, paper: str, uploads=None) -> bytes:
     _set_font(c, False, 12)
     c.drawString(bx + TRIM * 0.12, BLEED + TRIM * 0.12, "24 Missionen • 24 Stunden • KDP-ready")
 
-    # front
+    # front (right)
     fx = BLEED + TRIM + sw
     c.setFillColor(colors.white)
     c.rect(fx, BLEED, TRIM, TRIM, fill=1, stroke=0)
 
-    # collage
+    # collage zone (behind)
     collage_px = int((TRIM * DPI / inch) * 0.72)
     collage = _cover_collage_png(uploads, collage_px, _stable_seed(name + "|cover"))
     if collage:
@@ -758,7 +741,7 @@ def build_listing_text(child_name: str) -> str:
 # =========================================================
 st.set_page_config(page_title=APP_TITLE, layout="centered", page_icon=APP_ICON)
 
-# Streamlit warning killer (no value/key conflict)
+# ---- Streamlit warning killer (no value/key conflict)
 st.session_state.setdefault("pages", KDP_MIN_PAGES)
 st.session_state.setdefault("paper", list(PAPER_FACTORS.keys())[0])
 
@@ -858,7 +841,10 @@ if st.button("🚀 Buch generieren", disabled=not can_build):
         if st.session_state.assets:
             for f in st.session_state.assets.values():
                 if isinstance(f, str) and os.path.exists(f):
-                    _safe_unlink(f)
+                    try:
+                        os.remove(f)
+                    except Exception:
+                        pass
 
         st.session_state.assets = {
             "int": _tmp("int_", ".pdf", int_pdf),
