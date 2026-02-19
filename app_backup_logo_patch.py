@@ -28,26 +28,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
-import os
-
-def _draw_logo(c, x_center, y_center, width):
-    path = "eddie_logo.png"
-    if not os.path.exists(path):
-        return
-    try:
-        img = ImageReader(path)
-        w = width
-        h = width
-        c.drawImage(
-            img,
-            x_center - w/2,
-            y_center - h/2,
-            width=w,
-            height=h,
-            mask="auto"
-        )
-    except Exception:
-        pass
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -673,7 +653,7 @@ def build_cover(name: str, pages: int, paper: str, uploads, eddie_style: str) ->
     c.drawCentredString(fx + TRIM / 2, BLEED + TRIM * 0.79, f"& {name}")
 
     # brand mark (NO SMILEY)
-    _draw_logo(c, fx + TRIM / 2, BLEED + TRIM * 0.58, TRIM * 0.28)
+    _draw_eddie(c, fx + TRIM / 2, BLEED + TRIM * 0.62, TRIM * 0.16, style=eddie_style)
 
     c.save()
     buf.seek(0)
