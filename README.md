@@ -1,188 +1,28 @@
-# 🐶 Eddies Print Engine
+﻿# E. P. E. — Eddie’s Print Engine (v5.10.1)
 
-**Eddies** ist eine deterministische **Print-PDF-Engine** für Quest-, Activity- und Workbook-Bücher —  
-inkl. **Bleed/Safe-Zones**, **300-DPI Preflight**, **CoverWrap/Spine** und **Listing-Assets**.
+Generate KDP-ready interior + cover PDFs from uploaded photos.
 
-**Fokus:** drucktechnische Korrektheit, reproduzierbare Builds (stable seed / SHA-256), RAM-only Verarbeitung.
+## Features
+- **26 fixed pages** (24 missions + intro/outro)
+- **240 dynamic quests** + reserve (automatically generated)
+- **KDP Preflight Mode** (geometry facts + barcode zone + safe boxes)
+- **Upload Hardening** (12MB per file, 160MB total, OpenCV 25MP guard)
+- **Stripe Paywall** (Optional, via session_id validation)
 
-## Outputs
-- ✅ Interior PDF (KDP-ready / Preview)
-- ✅ CoverWrap PDF (Back + Spine + Front)
-- ✅ Listing.txt (SEO/Textbundle)
-- ✅ Optional: ZIP Bundle (alle Assets)
-
-## Key Features
-- 📸 Foto → Sketch (OpenCV) + Center-Crop + 300-DPI Resize
-- 🧭 24h Quest-System (Zonen + Mission Overlay: Bewegung / Denken / Proof / XP)
-- 🖨️ Print-Safety: Bleed/Safe, min. Seiten, gerade Seitenzahl, Preflight-Checks
-- 🔁 Deterministisch: reproduzierbare Seiten & Missionen via stable seed
-- 🔒 Privacy: Uploads werden nicht gespeichert (RAM-only)
-
-
-# 🧠 System-Architektur
-
-Eddies ist modular aufgebaut:
-
-| Modul | Aufgabe |
-|--------|---------|
-| `app.py` | Questbook Edition (Foto → 24h Missionsbuch) |
-| `engine_sketch.py` | Aktivitätsgrafiken (Maze + Suchauftrag, deterministic) |
-| `quest_data.py` | Zentrale Quest-Datenbank (Zones + Missions + Audience-Adapter) |
-| `kern/pdf_engine.py` | Print-Geometrie + Bleed + Safe + Icon Registry |
-| `app_trainer.py` | Fachsprach-Workbook (Vokabel + Bild + Notizen) |
-
-Alle Editionen nutzen dieselbe Print-Engine.
-
----
-
-# 🚀 Core Features
-
-## 📸 Foto → Ausmalbild
-
-- OpenCV Sketch-Engine (druckfreundliche Linien)
-- Center-Crop + Resize (Quadrat, 300 DPI)
-- Deterministische Verarbeitung (Seed-basiert)
-- RAM-only Bildverarbeitung
-
----
-
-## 🧭 24h Quest-System
-
-- Jede Seite = 1 Stunde (Startzeit wählbar)
-- 8 thematische Zonen (00–24h)
-- Mission Overlay mit:
-  - Bewegung
-  - Denkaufgabe
-  - Proof-Check
-  - XP
-- Automatische Schwierigkeitsanpassung (Alter → Stufe 1–5)
-- Audience-Modi:
-  - Kid
-  - Adult
-  - Senior
-
-Gamification ohne Wettbewerb – Fokus auf Selbstwirksamkeit.
-
----
-
-## 🧩 Aktivitäts-Engine (engine_sketch)
-
-Optional generierbare Activity-Seiten:
-
-- Labyrinth (seed-basiert)
-- Suchaufträge
-- Druckoptimierte Liniengrafik
-- Kein Bildmaterial notwendig
-
----
-
-## 🖨️ KDP Print Pipeline (Production-Ready)
-
-### Formate
-- Preview Mode: 8.5" × 8.5"
-- KDP Print Mode: 8.75" × 8.75" (8.5" + 0.125" Bleed)
-
-### Print-Sicherheit
-- Safe-Zone korrekt berechnet
-- Forced Compliance:
-  - min. 24 Seiten
-  - gerade Seitenzahl
-- Preflight Check (300 DPI Ziel)
-- QA-Warnseite im Preview-Modus
-- Spine-Berechnung abhängig vom Papier
-- Barcode-Keepout
-- Spine-Text erst ab 79 Seiten
-
----
-
-## 🎨 Cover + Publishing Assets
-
-- CoverWrap PDF (Back + Spine + Front)
-- Automatische Spine-Breite
-- Listing.txt (KDP-Ready Textbundle)
-- ZIP Export (Interior + Cover + Listing)
-
----
-
-## 🧠 Eddie Trainer (Fachsprach Edition)
-
-- Vokabel-Input (deutsch;übersetzung)
-- Bild-Zyklus oder Icon-Fallback
-- Notizbereich
-- KDP-kompatibel
-- Nutzt dieselbe Print-Engine
-
----
-
-## 🎨 Icon System (Registry)
-
-- Skalierbare Vektor-Piktogramme
-- Drucksicher (kein Raster nötig)
-- Erweiterbar über `ICON_DRAWERS`
-- Einheitlicher Brand-Akzent (EDDIE_PURPLE)
-
----
-
-## 🔒 Privacy-First
-
-- Keine Speicherung von Uploads
-- Verarbeitung ausschließlich im RAM
-- Download als PDF/ZIP
-- Keine Cloud-Datenbank
-
----
-
-# 🧰 Tech Stack
-
-- Streamlit
-- OpenCV (headless)
-- Pillow
-- ReportLab
-- Deterministic Random Engine
-
----
-
-# 🎯 Design-Prinzipien
-
-- Druck vor Design  
-- Struktur vor Spielerei  
-- Modularität vor Chaos  
-- Wiederholbarkeit vor Zufall  
-
-Eddies ist kein „Malbuch-Generator“.  
-Es ist eine deterministische Print-Engine mit Gamification-Overlay.
-
----
-
-# 🚀 Schnellstart (Lokal)
+## Quickstart
 
 ```bash
-git clone https://github.com/KeschFlow/kids-activity-book-generator.git
-cd kids-activity-book-generator
-
 python -m venv .venv
-
-# macOS / Linux
-source .venv/bin/activate
-
-# Windows
-# .venv\Scripts\Activate.ps1
-
+# Windows: .venv\Scripts\activate
+# Mac/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-
-# Quest Edition
 streamlit run app.py
-
-# Trainer Edition
-streamlit run app_trainer.py
 ```
 
----
-
-# 🔮 Roadmap
-
-- KI-Image-Fallback für Trainer
-- Mehrsprachige Quest-Datenbank
-- Weitere Print-Formate (A4, 6x9, Workbook)
-- Hub-App zur Modul-Auswahl
-- SaaS-Version
+## Optional Stripe Config
+Create `.streamlit/secrets.toml`:
+```toml
+STRIPE_SECRET_KEY="sk_live_xxx"
+STRIPE_PAYMENT_LINK="[https://buy.stripe.com/](https://buy.stripe.com/)..."
+```
+Without secrets, the app runs in Dev Mode (unlocked for testing).
