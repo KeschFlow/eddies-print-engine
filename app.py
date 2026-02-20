@@ -1104,10 +1104,18 @@ def build_interior(name, uploads, kdp, debug, preflight, paper, eddie, style, pr
         shapes = _generate_shapes(pb, sl, sr, stb, bool(pre_reader), seed)
         _draw_shapes(c, shapes)
 
-        tri = sum(1 for s in shapes if s.kind == "triangle")
+                tri = sum(1 for s in shapes if s.kind == "triangle")
         sq = sum(1 for s in shapes if s.kind == "square")
         st_ = sum(1 for s in shapes if s.kind == "star")
         t_shapes = len(shapes)
+
+        # === v5.11 PRODUCTION PATCH: Sprache & 0-Logik ===
+        def _de_plural(n: int, singular: str, plural: str) -> str:
+            return singular if int(n) == 1 else plural
+
+        str_tri = f"{tri} {_de_plural(tri, 'Dreieck', 'Dreiecke')}"
+        str_sq  = f"{sq} {_de_plural(sq, 'Quadrat', 'Quadrate')}"
+        str_st  = f"{st_} {_de_plural(st_, 'Stern', 'Sterne')}"
 
         q_data = schedule[hour]
 
@@ -1116,9 +1124,36 @@ def build_interior(name, uploads, kdp, debug, preflight, paper, eddie, style, pr
             m_move = _kid_short(q_data["movement"], 3)
             m_proof = "Haken!"
         else:
-            m_think = q_data["thinking"].format(tri=tri, sq=sq, st_=st_, total=t_shapes)
+            # Grammatik-korrektes Thinking (statt Template aus DB)
+            t_idx = i % 3
+            if t_idx == 0:
+                m_think = f"Finde {str_tri}, {str_sq} und {str_st}."
+            elif t_idx == 1:
+                m_think = f"Spüre insgesamt {t_shapes} versteckte Formen auf (△, □, ★)."
+            else:
+                m_think = f"Suche: {tri}x Dreieck, {sq}x Quadrat, {st_}x Stern."
+
             m_move = q_data["movement"]
-            m_proof = q_data["proof"]
+
+            # Proof aus DB holen, aber unlösbares verhindern
+            m_proof = q_data["proof"] or ""
+
+            # 0-Interceptor (unmöglich -> neutral ersetzen)
+            if ("Dreieck" in m_proof or "Dreie" in m_proof) and tri == 0:
+                m_proof = "Zähle laut mit und hake die Mission ab."
+            elif ("Quadrat" in m_proof or "Quadrate" in m_proof) and sq == 0:
+                m_proof = "Verbinde alle gefundenen Formen mit einer Linie."
+            elif ("Stern" in m_proof or "Sterne" in m_proof) and st_ == 0:
+                m_proof = "Setze einen Punkt in jede gefundene Form."
+
+            # Optional: Proof-Singular sauberziehen, falls DB Plural verwendet
+            if tri == 1:
+                m_proof = m_proof.replace("Dreiecke", "Dreieck")
+            if sq == 1:
+                m_proof = m_proof.replace("Quadrate", "Quadrat")
+            if st_ == 1:
+                m_proof = m_proof.replace("Sterne", "Stern")
+        # ====================================================
 
         mission = Mission(
             title=q_data["title"],
