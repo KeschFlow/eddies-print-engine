@@ -350,8 +350,8 @@ MAX_WASH_CACHE = 64
 BUILD_TAG = "v5.10.2-final"
 
 # QR target (printed)
-QR_URL = "https://keschflow.github.io/start/"
-QR_TEXT = "keschflow.github.io/start"
+QR_URL = "https://keschflow.github.io/eddies-print-engine/"
+QR_TEXT = "keschflow.github.io/eddies-print-engine"
 
 # =========================================================
 # CORE & PAGE GEOMETRY
