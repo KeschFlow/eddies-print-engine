@@ -1,33 +1,37 @@
 {
-  "name": "Python 3",
-  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "name": "eddies-print-engine (Python 3.11 + Streamlit AutoStart)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "forwardPorts": [8502],
+
+  "portsAttributes": {
+    "8502": {
+      "label": "Streamlit (E.P.E.)",
+      "onAutoForward": "openPreview",
+      "visibility": "public"
+    }
+  },
+
   "customizations": {
-    "codespaces": {
-      "openFiles": [
-        "README.md",
-        "app.py"
-      ]
-    },
     "vscode": {
-      "settings": {},
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
-      ]
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
-  },
-  "portsAttributes": {
-    "8501": {
-      "label": "Application",
-      "onAutoForward": "openPreview"
-    }
-  },
-  "forwardPorts": [
-    8501
-  ]
+
+  "postCreateCommand": "python -m pip install --upgrade pip && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi && mkdir -p .streamlit && printf \"[server]\\nport = 8502\\naddress = '0.0.0.0'\\nenableCORS = false\\nenableXsrfProtection = false\\n\\n[browser]\\ngatherUsageStats = false\\n\" > .streamlit/config.toml && mkdir -p .streamlit && if [ ! -f .streamlit/secrets.toml ]; then printf \"STRIPE_SECRET_KEY = \\\"\\\"\\nSTRIPE_PAYMENT_LINK = \\\"\\\"\\n\" > .streamlit/secrets.toml; fi",
+
+  "postStartCommand": "bash -lc \"(pgrep -f 'streamlit run app.py' >/dev/null) || (nohup streamlit run app.py --server.port 8502 --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false >/tmp/streamlit.log 2>&1 & disown)\""
 }
