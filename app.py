@@ -1124,7 +1124,6 @@ def build_interior(name, uploads, kdp, debug, preflight, paper, eddie, style, pr
             m_move = _kid_short(q_data["movement"], 3)
             m_proof = "Haken!"
         else:
-            # Grammatik-korrektes Thinking (statt Template aus DB)
             t_idx = i % 3
             if t_idx == 0:
                 m_think = f"Finde {str_tri}, {str_sq} und {str_st}."
@@ -1135,10 +1134,8 @@ def build_interior(name, uploads, kdp, debug, preflight, paper, eddie, style, pr
 
             m_move = q_data["movement"]
 
-            # Proof aus DB holen, aber unlösbares verhindern
             m_proof = q_data["proof"] or ""
 
-            # 0-Interceptor (unmöglich -> neutral ersetzen)
             if ("Dreieck" in m_proof or "Dreie" in m_proof) and tri == 0:
                 m_proof = "Zähle laut mit und hake die Mission ab."
             elif ("Quadrat" in m_proof or "Quadrate" in m_proof) and sq == 0:
@@ -1146,7 +1143,6 @@ def build_interior(name, uploads, kdp, debug, preflight, paper, eddie, style, pr
             elif ("Stern" in m_proof or "Sterne" in m_proof) and st_ == 0:
                 m_proof = "Setze einen Punkt in jede gefundene Form."
 
-            # Optional: Proof-Singular sauberziehen, falls DB Plural verwendet
             if tri == 1:
                 m_proof = m_proof.replace("Dreiecke", "Dreieck")
             if sq == 1:
