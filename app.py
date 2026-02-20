@@ -4,7 +4,7 @@
 # Includes:
 # - Streamlit Cloud / OpenCV fix via runtime.txt (Python 3.11)
 # - 24-hour color system (quest_data.py:get_hour_color)
-# - OUTRO CTA page with VECTOR QR (ReportLab) -> https://keschflow.github.io/start/
+# - OUTRO CTA page with VECTOR QR (ReportLab) -> https://keschflow.github.io/eddies-print-engine/
 # - KDP preflight + safe zones + barcode zone + cover facts strip
 # - Upload hardening + SQLite fair-use rate limit
 # =========================================================
