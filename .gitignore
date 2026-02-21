@@ -1,17 +1,21 @@
-﻿__pycache__/
+# python
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.egg-info/
-dist/
-build/
+
+# env
 .venv/
 venv/
+.env
 
+# streamlit
 .streamlit/secrets.toml
 
+# artifacts
 fair_use.db
 *.pdf
+*.log
 
+# OS
 .DS_Store
-Thumbs.db
