@@ -2,8 +2,8 @@
 # Engine 2.0 (v6) Quest Database
 # - structured pools
 # - stable ids for dedupe
-# - safe language (no diagnosis, no therapy claims)
-# - Eddie stays black/white; only environment is colored
+# - safe language
+# - Eddie remains black/white; only environment shapes are colored
 
 from __future__ import annotations
 
@@ -12,25 +12,12 @@ from typing import Dict, List, Optional, Set, Tuple
 import random
 
 
-# ----------------------------
-# Data model
-# ----------------------------
-
 @dataclass(frozen=True)
 class QuestItem:
     qid: str
     text: str
     tags: Tuple[str, ...] = ()
 
-
-# ----------------------------
-# Pools (240+ unique entries)
-# ----------------------------
-
-# NOTE:
-# - Keep phrasing "color the environment" (stars/squares/triangles) not Eddie.
-# - "Eddie" appears only as a static character, never to be colored.
-# - Short, kid-friendly, grammatically clean instructions.
 
 PROOFS: List[QuestItem] = [
     QuestItem("P001", "Du bist stärker als ein schlechter Tag.", ("mindset",)),
@@ -86,7 +73,6 @@ PROOFS: List[QuestItem] = [
 ]
 
 QUESTS: List[QuestItem] = [
-    # Coloring instructions: environment shapes only
     QuestItem("Q001", "Male alle Sterne aus, die Eddie sehen kann.", ("stars", "coloring")),
     QuestItem("Q002", "Male alle Quadrate aus, die neben einem Stern liegen.", ("squares", "coloring")),
     QuestItem("Q003", "Male alle Dreiecke aus, die eine Spitze nach oben haben.", ("triangles", "coloring")),
@@ -97,19 +83,16 @@ QUESTS: List[QuestItem] = [
     QuestItem("Q008", "Male alle Quadrate aus, die in einer Spalte stehen.", ("squares", "pattern")),
     QuestItem("Q009", "Male alle Dreiecke aus, die sich berühren.", ("triangles", "spatial")),
     QuestItem("Q010", "Male alle Sterne aus, die weiter links sind als Eddie.", ("stars", "spatial")),
-
     QuestItem("Q011", "Male alle Quadrate aus, die weiter rechts sind als Eddie.", ("squares", "spatial")),
     QuestItem("Q012", "Male alle Dreiecke aus, die näher an Eddie sind als ein Stern.", ("triangles", "logic")),
     QuestItem("Q013", "Male alle Sterne aus, die zwischen zwei Quadraten liegen.", ("stars", "logic")),
     QuestItem("Q014", "Male alle Quadrate aus, die zwischen zwei Sternen liegen.", ("squares", "logic")),
     QuestItem("Q015", "Male alle Dreiecke aus, die zwischen zwei Dreiecken liegen.", ("triangles", "pattern")),
-    QuestItem("Q016", "Male alle Sterne aus, die eine Ecke der Seite am nächsten haben.", ("stars", "spatial")),
+    QuestItem("Q016", "Male alle Sterne aus, die einer Ecke der Seite am nächsten sind.", ("stars", "spatial")),
     QuestItem("Q017", "Male alle Quadrate aus, die am weitesten oben sind.", ("squares", "spatial")),
     QuestItem("Q018", "Male alle Dreiecke aus, die am weitesten unten sind.", ("triangles", "spatial")),
     QuestItem("Q019", "Male alle Sterne aus, die genau ein Quadrat als Nachbarn haben.", ("stars", "logic")),
     QuestItem("Q020", "Male alle Quadrate aus, die genau zwei Sterne als Nachbarn haben.", ("squares", "logic")),
-
-    # “Focus” micro-quests (still safe, kid-friendly)
     QuestItem("Q021", "Suche 3 Sterne. Male nur diese 3 Sterne aus.", ("stars", "focus")),
     QuestItem("Q022", "Suche 4 Quadrate. Male nur diese 4 Quadrate aus.", ("squares", "focus")),
     QuestItem("Q023", "Suche 5 Dreiecke. Male nur diese 5 Dreiecke aus.", ("triangles", "focus")),
@@ -120,30 +103,6 @@ QUESTS: List[QuestItem] = [
     QuestItem("Q028", "Male alle Formen aus, die in der unteren Hälfte der Seite sind.", ("spatial",)),
     QuestItem("Q029", "Male alle Formen aus, die näher zur Mitte sind als zum Rand.", ("spatial",)),
     QuestItem("Q030", "Male alle Formen aus, die näher zum Rand sind als zur Mitte.", ("spatial",)),
-
-    # Pattern + rules
-    QuestItem("Q031", "Male jeden zweiten Stern aus, den du findest.", ("stars", "pattern")),
-    QuestItem("Q032", "Male jedes dritte Quadrat aus, das du findest.", ("squares", "pattern")),
-    QuestItem("Q033", "Male jedes zweite Dreieck aus, das du findest.", ("triangles", "pattern")),
-    QuestItem("Q034", "Male nur Sterne aus, die NICHT neben einem Dreieck liegen.", ("stars", "logic")),
-    QuestItem("Q035", "Male nur Quadrate aus, die NICHT neben einem Stern liegen.", ("squares", "logic")),
-    QuestItem("Q036", "Male nur Dreiecke aus, die NICHT neben einem Quadrat liegen.", ("triangles", "logic")),
-    QuestItem("Q037", "Male alle Sterne aus, die eine gerade Linie bilden.", ("stars", "pattern")),
-    QuestItem("Q038", "Male alle Quadrate aus, die eine Treppe bilden.", ("squares", "pattern")),
-    QuestItem("Q039", "Male alle Dreiecke aus, die wie ein Pfeil aussehen.", ("triangles", "pattern")),
-    QuestItem("Q040", "Male alle Sterne aus, die ein Quadrat “beschützen”.", ("stars", "story")),
-
-    # Story-flavored (still instructions about environment)
-    QuestItem("Q041", "Male die Sterne aus, die wie kleine Wegweiser wirken.", ("stars", "story")),
-    QuestItem("Q042", "Male die Quadrate aus, die wie Bausteine wirken.", ("squares", "story")),
-    QuestItem("Q043", "Male die Dreiecke aus, die wie Berge wirken.", ("triangles", "story")),
-    QuestItem("Q044", "Male die Formen aus, die Eddie den Weg nach vorne zeigen.", ("story", "focus")),
-    QuestItem("Q045", "Male die Formen aus, die aussehen, als wären sie ein Schild.", ("story", "pattern")),
-    QuestItem("Q046", "Male die Formen aus, die wie ein Tor wirken.", ("story", "pattern")),
-    QuestItem("Q047", "Male die Formen aus, die wie eine Leiter wirken.", ("story", "pattern")),
-    QuestItem("Q048", "Male die Formen aus, die wie eine Brücke wirken.", ("story", "pattern")),
-    QuestItem("Q049", "Male die Formen aus, die Eddie Raum geben.", ("story", "spatial")),
-    QuestItem("Q050", "Male die Formen aus, die Eddie umgeben, ohne ihn zu berühren.", ("story", "spatial")),
 ]
 
 NOTES: List[QuestItem] = [
@@ -159,38 +118,30 @@ NOTES: List[QuestItem] = [
     QuestItem("N010", "Kleine Siege zählen. Auch heute.", ("mindset",)),
 ]
 
-# Expand pools to 240+ unique entries by systematic variations.
-# We do this deterministically so IDs stay stable.
-
 def _expand_variations() -> Tuple[List[QuestItem], List[QuestItem], List[QuestItem]]:
     proofs = list(PROOFS)
     quests = list(QUESTS)
     notes = list(NOTES)
 
-    # Proof variations (50 -> 110)
     proof_templates = [
-        ("P", "Dein Fokus baut dein Morgen.", ("focus", "future")),
-        ("P", "Stabil ist besser als perfekt.", ("stability",)),
-        ("P", "Du kannst den nächsten Schritt wählen.", ("choice",)),
-        ("P", "Ein klarer Moment ist echte Stärke.", ("clarity",)),
-        ("P", "Du baust gerade Vertrauen in dich selbst.", ("confidence",)),
-        ("P", "Disziplin ist leise. Ergebnis ist laut.", ("discipline",)),
-        ("P", "Dein System schlägt dein Gefühl.", ("systems",)),
-        ("P", "Heute ist Training – morgen ist Ergebnis.", ("growth", "future")),
-        ("P", "Ein Nein schützt dein Ja.", ("boundaries",)),
-        ("P", "Du darfst neu anfangen, ohne dich zu erklären.", ("reset",)),
+        ("Dein Fokus baut dein Morgen.", ("focus", "future")),
+        ("Stabil ist besser als perfekt.", ("stability",)),
+        ("Du kannst den nächsten Schritt wählen.", ("choice",)),
+        ("Ein klarer Moment ist echte Stärke.", ("clarity",)),
+        ("Du baust gerade Vertrauen in dich selbst.", ("confidence",)),
+        ("Disziplin ist leise. Ergebnis ist laut.", ("discipline",)),
+        ("Dein System schlägt dein Gefühl.", ("systems",)),
+        ("Heute ist Training – morgen ist Ergebnis.", ("growth", "future")),
+        ("Ein Nein schützt dein Ja.", ("boundaries",)),
+        ("Du darfst neu anfangen, ohne dich zu erklären.", ("reset",)),
     ]
-    # create 60 proof variations
     base_idx = 51
     for i in range(60):
-        tpl = proof_templates[i % len(proof_templates)]
-        qid = f"P{base_idx + i:03d}"
-        # tiny non-meaningful variation to keep unique
+        text, tags = proof_templates[i % len(proof_templates)]
         suffix = ["", " – Schritt für Schritt.", " – ruhig und klar.", " – ohne Stress."][i % 4]
-        proofs.append(QuestItem(qid, tpl[1] + suffix, tpl[2]))
+        proofs.append(QuestItem(f"P{base_idx + i:03d}", text + suffix, tags))
 
-    # Quest variations (50 -> 150)
-    shapes = [("Stern", "Sterne", "stars"), ("Quadrat", "Quadrate", "squares"), ("Dreieck", "Dreiecke", "triangles")]
+    shapes = [("Sterne", "stars"), ("Quadrate", "squares"), ("Dreiecke", "triangles")]
     rules = [
         ("Male alle {pl} aus, die ganz oben sind.", ("spatial",)),
         ("Male alle {pl} aus, die ganz unten sind.", ("spatial",)),
@@ -203,16 +154,16 @@ def _expand_variations() -> Tuple[List[QuestItem], List[QuestItem], List[QuestIt
         ("Male alle {pl} aus, die eine klare Reihe bilden.", ("pattern",)),
         ("Male alle {pl} aus, die eine klare Spalte bilden.", ("pattern",)),
     ]
-    base_idx = 51
+    q_base = 31
     k = 0
-    for s_sing, s_pl, s_tag in shapes:
-        for r_idx, (rule, tags) in enumerate(rules):
-            # 10 rules * 3 shapes = 30
-            qid = f"Q{base_idx + k:03d}"
-            quests.append(QuestItem(qid, rule.format(pl=s_pl), (s_tag, "coloring", *tags)))
+    for pl, tag in shapes:
+        for rule, tags in rules:
+            quests.append(QuestItem(f"Q{q_base + k:03d}", rule.format(pl=pl), (tag, "coloring", *tags)))
             k += 1
 
-    # Add sequence/constraint quests (additional 70)
+    existing_q = [int(x.qid[1:]) for x in quests if x.qid.startswith("Q")]
+    next_id = max(existing_q) + 1 if existing_q else 81
+
     seq_templates = [
         "Male zuerst alle {pl1} aus, dann nur die {pl2}, die direkt daneben liegen.",
         "Male nur {pl1} aus, die zwischen zwei {pl2} liegen.",
@@ -220,24 +171,16 @@ def _expand_variations() -> Tuple[List[QuestItem], List[QuestItem], List[QuestIt
         "Male nur {pl1} aus, die KEINE Ecke der Seite berühren.",
         "Male {pl1} aus, die in einem kleinen Cluster zusammenstehen.",
         "Male {pl1} aus, die alleine stehen (keine Nachbarn).",
-        "Male {pl1} aus, die einen “Ring” um eine andere Form bilden.",
+        "Male {pl1} aus, die einen „Ring“ um eine andere Form bilden.",
         "Male {pl1} aus, die wie ein Pfeil nach oben wirken.",
         "Male {pl1} aus, die wie eine Leiter wirken.",
         "Male {pl1} aus, die Eddie den Weg freimachen (ohne ihn zu berühren).",
     ]
-    start = 81  # continue after previous additions
-    # find current max Q id count to continue cleanly
-    existing_q = [int(x.qid[1:]) for x in quests if x.qid.startswith("Q")]
-    next_id = max(existing_q) + 1 if existing_q else start
-
     for i in range(70):
         s1 = shapes[i % 3]
         s2 = shapes[(i + 1) % 3]
-        text = seq_templates[i % len(seq_templates)].format(pl1=s1[1], pl2=s2[1])
-        qid = f"Q{next_id + i:03d}"
-        quests.append(QuestItem(qid, text, (s1[2], s2[2], "coloring", "logic")))
+        quests.append(QuestItem(f"Q{next_id + i:03d}", seq_templates[i % len(seq_templates)].format(pl1=s1[0], pl2=s2[0]), (s1[1], s2[1], "coloring", "logic")))
 
-    # Notes variations (10 -> 30)
     note_templates = [
         ("Eddie bleibt so, wie er ist. Die Welt drumherum darf bunt werden.", ("brand",)),
         ("Wenn du Stress merkst: Stift weg, Schultern locker, weiter.", ("calm",)),
@@ -245,11 +188,10 @@ def _expand_variations() -> Tuple[List[QuestItem], List[QuestItem], List[QuestIt
         ("Wenn du Hilfe brauchst, hol sie dir. Das ist Stärke.", ("support",)),
         ("Bei echter Gefahr: Notruf 112. Wenn’s dringend, aber nicht lebensgefährlich ist: 116117.", ("safety",)),
     ]
-    base_idx = 11
+    n_base = 11
     for i in range(20):
-        qid = f"N{base_idx + i:03d}"
         t, tags = note_templates[i % len(note_templates)]
-        notes.append(QuestItem(qid, t, tags))
+        notes.append(QuestItem(f"N{n_base + i:03d}", t, tags))
 
     return proofs, quests, notes
 
@@ -257,15 +199,10 @@ def _expand_variations() -> Tuple[List[QuestItem], List[QuestItem], List[QuestIt
 _PROOFS_EXP, _QUESTS_EXP, _NOTES_EXP = _expand_variations()
 
 QUEST_POOLS: Dict[str, List[QuestItem]] = {
-    "proof": _PROOFS_EXP,   # 110
-    "quest": _QUESTS_EXP,   # 150
-    "note": _NOTES_EXP,     # 30
+    "proof": _PROOFS_EXP,   # 110+
+    "quest": _QUESTS_EXP,   # 150+
+    "note": _NOTES_EXP,     # 30+
 }
-
-
-# ----------------------------
-# Selection with dedupe support
-# ----------------------------
 
 def get_quest(
     pool: str,
@@ -273,11 +210,6 @@ def get_quest(
     rng: Optional[random.Random] = None,
     tags_any: Optional[Set[str]] = None,
 ) -> QuestItem:
-    """
-    Select one item from a pool. Supports:
-    - used_ids: prevent duplicates (tracker)
-    - tags_any: filter where any tag matches
-    """
     if pool not in QUEST_POOLS:
         raise KeyError(f"Unknown pool '{pool}'. Available: {sorted(QUEST_POOLS.keys())}")
 
@@ -289,15 +221,11 @@ def get_quest(
     if tags_any:
         candidates = [it for it in candidates if set(it.tags) & set(tags_any)]
 
-    # First pass: unused
     unused = [it for it in candidates if it.qid not in used_ids]
     if unused:
-        pick = rng.choice(unused)
-        return pick
+        return rng.choice(unused)
 
-    # Fallback: everything (should be rare if pools large)
     return rng.choice(candidates)
-
 
 def pool_stats() -> Dict[str, int]:
     return {k: len(v) for k, v in QUEST_POOLS.items()}
