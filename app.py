@@ -143,8 +143,14 @@ _init_db()
 # =========================================================
 # ACCESS & LIMIT LOGIC
 # =========================================================
-STRIPE_SECRET = st.secrets.get("STRIPE_SECRET_KEY", "")
-PAYMENT_LINK = st.secrets.get("STRIPE_PAYMENT_LINK", "https://buy.stripe.com/...")
+# --- SECRETS (Docker/Cloud safe) ---
+try:
+    _SECRETS = st.secrets  # may raise if secrets.toml is missing
+except Exception:
+    _SECRETS = {}
+
+STRIPE_SECRET = _SECRETS.get("STRIPE_SECRET_KEY", "")
+PAYMENT_LINK  = _SECRETS.get("STRIPE_PAYMENT_LINK", "https://buy.stripe.com/...")
 
 FREE_LIMIT = 3
 COMMUNITY_TOKENS = {"KITA-2026": 50, "SCHULE-X": 50, "THERAPIE-EDDIE": 100}
