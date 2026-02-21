@@ -1293,6 +1293,6 @@ if st.session_state.assets:
             "E.P.E. Eddie's Print Engine ist ein **Community-Projekt**.\n"
             "Wenn du kannst, hilf uns, die Serverkosten zu tragen:"
         )
-        st.link_button("☕ Spendiere uns einen Kaffee (Werde Unterstützer)", https://ko-fi.com/eddiesworld)
+        st.link_button("☕ Spendiere uns einen Kaffee (Werde Unterstützer)", "https://ko-fi.com/eddiesworld")
 
 st.markdown("<div style='text-align:center; color:grey; margin-top: 50px;'>Eddies World © 2026 • Ein Projekt für jedes Kind (und jeden Senior).</div>", unsafe_allow_html=True)
